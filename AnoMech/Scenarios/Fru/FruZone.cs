@@ -33,7 +33,7 @@ public sealed class FruZone : IZone
     public Vector3 Origin => new(100f, 0f, 100f);
 
     public IReadOnlyList<WaymarkLayout> WaymarkPresets { get; } =
-        [new WaymarkLayout("Inner Circle", InnerCircleWaymarks)];
+        [new WaymarkLayout("Inner Circle", InnerCircleWaymarks), new WaymarkLayout("JP · Lily Doll (1 NE / 2 SE / 3 SW / 4 NW)", JpWaymarks)];
 
     public DutyInitData DutyInitData => FruReplayData.DutyInitData;
 

@@ -21,6 +21,18 @@ public static class FruConstants
         new(WaymarkSlot.Four,  new Vector3( -7.07f, 0f,  7.07f)),
     ];
 
+    public static IReadOnlyList<Waymark> JpWaymarks =>
+    [
+        new(WaymarkSlot.A, new Vector3(0, 0, -10)),
+        new(WaymarkSlot.B, new Vector3(10, 0, 0)),
+        new(WaymarkSlot.C, new Vector3(0, 0, 10)),
+        new(WaymarkSlot.D, new Vector3(-10, 0, 0)),
+        new(WaymarkSlot.One, new Vector3(7.07f, 0, -7.07f)),
+        new(WaymarkSlot.Two, new Vector3(7.07f, 0, 7.07f)),
+        new(WaymarkSlot.Three, new Vector3(-7.07f, 0, 7.07f)),
+        new(WaymarkSlot.Four, new Vector3(-7.07f, 0, -7.07f)),
+    ];
+
     public static class Geometry
     {
         public const float ArenaRadius = 20f;

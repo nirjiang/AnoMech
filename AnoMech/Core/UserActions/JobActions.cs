@@ -277,6 +277,8 @@ internal static unsafe class JobActions
         // Tank role
         [7531] = [Status(1191, 20f)],   // Rampart
         [7535] = [EnemyStatus(1193, 15f)],   // Reprisal
+        [7548] = [Status(Core.Game.KnockbackImmunity.ArmsLength, 6f)],
+        [7559] = [Status(Core.Game.KnockbackImmunity.Surecast, 6f)],
 
         // Tank LB3
         [199]   = [TargetStatus(196, 8f)],    // Last Bastion
