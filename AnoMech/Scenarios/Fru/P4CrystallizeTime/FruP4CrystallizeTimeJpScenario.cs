@@ -23,7 +23,7 @@ public sealed class FruP4CrystallizeTimeJpScenario : IScenario, IScenarioRegionV
     public IPhase Phase => FruZone.P4;
 
     public IReadOnlyList<IScenarioAi> AiStrats => strats;
-    private readonly IReadOnlyList<IScenarioAi> strats = [new FruP4CrystallizeTimeJpAi(jp: true)];
+    private readonly IReadOnlyList<IScenarioAi> strats = [new FruP4CrystallizeTimeJpAi()];
 
     public void DrawSettings() => settingsWindow.Draw();
     public object SettingsOverrides => settingsWindow.Overrides;

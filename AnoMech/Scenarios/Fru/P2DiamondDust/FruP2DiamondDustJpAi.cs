@@ -9,13 +9,13 @@ using static AnoMech.Scenarios.Fru.P2DiamondDust.FruP2DiamondDustState;
 
 namespace AnoMech.Scenarios.Fru.P2DiamondDust;
 
-public sealed class FruP2DiamondDustJpAi(bool jp = true) : IScenarioAi<FruP2DiamondDustState>
+public sealed class FruP2DiamondDustJpAi : IScenarioAi<FruP2DiamondDustState>
 {
-    public string Name => jp ? "JP · Lily Doll / clockwise / colour groups" : "NA · Partner Swap";
-    public string Group => jp ? "JP" : "NA";
+    public string Name => "JP · Lily Doll / clockwise / colour groups";
+    public string Group => "JP";
 
-    private static readonly int[] Clocks = [0, 2, 6, 4, 5, 3, 7, 1];
-    private static readonly int[] JpClocks = [0, 4, 6, 2, 5, 3, 7, 1];
+    private static readonly int[] Clocks = [0, 4, 6, 2, 5, 3, 7, 1];
+    private static readonly int[] GroupOneOctants = [0, 1, 6, 7];
     private const float SlideDistance = 32f;
     private const float SlideSeconds = 1f;
     private const float PuddleRadius = 6f;
@@ -60,9 +60,9 @@ public sealed class FruP2DiamondDustJpAi(bool jp = true) : IScenarioAi<FruP2Diam
 
     private int Clock(PartyRole role)
     {
-        var original = (jp ? JpClocks : Clocks)[(int)role];
+        var original = Clocks[(int)role];
         var requiredParity = (state.FirstIcicle + (state.Marked(role) ? 1 : 0)) & 1;
-        return (original + ((original & 1) == requiredParity ? 0 : jp || (int)role >= 4 ? 1 : 7)) % 8;
+        return (original + ((original & 1) == requiredParity ? 0 : 1)) % 8;
     }
 
     private Vector3? KickSpot(PartyRole role) => Point(Clock(role), (state.Axe ? 16 : 0) + (state.Marked(role) ? 3 : 1));
@@ -72,7 +72,7 @@ public sealed class FruP2DiamondDustJpAi(bool jp = true) : IScenarioAi<FruP2Diam
 
     private int KnockbackOctant(PartyRole role)
     {
-        var groupOne = jp ? new[] { 0, 1, 6, 7 }[state.FirstIcicle] : state.FirstIcicle == 0 ? 0 : state.FirstIcicle + 4;
+        var groupOne = GroupOneOctants[state.FirstIcicle];
         return (groupOne + (GroupOne(role) ? 0 : 4)) % 8;
     }
 

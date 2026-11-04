@@ -8,10 +8,10 @@ using static AnoMech.Scenarios.Fru.P5ParadiseRegained.FruP5ParadiseRegainedState
 
 namespace AnoMech.Scenarios.Fru.P5ParadiseRegained;
 
-public sealed class FruP5ParadiseRegainedJpAi(bool jp = true) : IScenarioAi<FruP5ParadiseRegainedState>
+public sealed class FruP5ParadiseRegainedJpAi : IScenarioAi<FruP5ParadiseRegainedState>
 {
-    public string Name => jp ? "JP · Nukemaru / H then melee-ranged towers / T-M-R-H" : "H first / M1-R1 NW / M2-R2 NE; lines T-M-R-H";
-    public string Group => jp ? "JP" : "NA";
+    public string Name => "JP · Nukemaru / H then melee-ranged towers / T-M-R-H";
+    public string Group => "JP";
 
     private FruP5ParadiseRegainedState state = null!;
 
@@ -20,8 +20,8 @@ public sealed class FruP5ParadiseRegainedJpAi(bool jp = true) : IScenarioAi<FruP
         state = stateParam;
         var ai = new AiManager(world);
         ai.Move(2f, () => ByRole(StackUnderFirstTower), jitter: 0f, arrivalTime: 8.3f);
-        ai.Move(10f, () => ByRole(role => state.Rotate(jp ? JpFirstWingSpot(role) : FirstWingSpot(role))), jitter: 0f, arrivalTime: TowerHitAt(0));
-        ai.Move(16.5f, () => ByRole(role => state.Rotate(jp ? JpSecondWingSpot(role) : SecondWingSpot(role))), jitter: 0f, arrivalTime: TowerHitAt(1));
+        ai.Move(10f, () => ByRole(role => state.Rotate(FirstWingSpot(role))), jitter: 0f, arrivalTime: TowerHitAt(0));
+        ai.Move(16.5f, () => ByRole(role => state.Rotate(SecondWingSpot(role))), jitter: 0f, arrivalTime: TowerHitAt(1));
         ai.Move(25.5f, () => ByRole(PolarizingPreposition), jitter: 0f, arrivalTime: 30f);
         ai.Move(30f, () => ByRole(role => LineSpot(role, 0, dodged: false)), jitter: 0f, arrivalTime: LinesAimedAt(0));
         for (var round = 0; round < 4; round++)
@@ -36,48 +36,25 @@ public sealed class FruP5ParadiseRegainedJpAi(bool jp = true) : IScenarioAi<FruP
 
     private Vector3? StackUnderFirstTower(PartyRole role) => state.Rotate(new Vector3(((int)role - 3.5f) * 0.35f, 0f, 7f));
 
+    private float FirstWingSide => state.DarkFirst ? -1f : 1f;
+
     private Vector3 FirstWingSpot(PartyRole role) => role switch
     {
-        PartyRole.MainTank => new(state.DarkFirst ? -6.0622f : 6.0622f, 0f, -3.5f),
-        PartyRole.OffTank => state.DarkFirst ? new(0f, 0f, 1f) : new(10f, 0f, 10f),
-        PartyRole.RegenHealer => new(-0.65f, 0f, 7f),
-        PartyRole.ShieldHealer => new(0.65f, 0f, 7f),
-        PartyRole.MeleeDpsA => new(-3.5f, 0f, 9.5f),
-        PartyRole.PhysRangedDps => new(-3.8f, 0f, 9.7f),
-        PartyRole.MeleeDpsB => new(3.5f, 0f, 9.5f),
-        _ => new(3.8f, 0f, 9.7f),
+        PartyRole.MainTank => new(0f, 0f, -7f),
+        PartyRole.OffTank => state.DarkFirst ? new(-1f, 0f, 0f) : new(10f, 0f, 10f),
+        PartyRole.RegenHealer or PartyRole.ShieldHealer => new(FirstWingSide * (0.6f + ((int)role % 2) * 0.4f), 0f, 7f),
+        _ => new(FirstWingSide * 3.5f, 0f, 9.5f),
     };
 
     private Vector3 SecondWingSpot(PartyRole role) => role switch
     {
         PartyRole.MainTank => new(0f, 0f, state.DarkFirst ? -14f : -1f),
         PartyRole.OffTank => new(state.DarkFirst ? -6.0622f : 6.0622f, 0f, 3.5f),
-        PartyRole.RegenHealer => new(-0.65f, 0f, -7.5f),
-        PartyRole.ShieldHealer => new(0.65f, 0f, -7.5f),
-        PartyRole.MeleeDpsA => new(-5f, 0f, -4.5f),
-        PartyRole.PhysRangedDps => new(-5.2f, 0f, -4.7f),
-        PartyRole.MeleeDpsB => new(5f, 0f, -4.5f),
-        _ => new(5.2f, 0f, -4.7f),
+        PartyRole.RegenHealer => new(-0.4f, 0f, -7.5f),
+        PartyRole.ShieldHealer => new(0.4f, 0f, -7.5f),
+        PartyRole.MeleeDpsA or PartyRole.MeleeDpsB => new(state.DarkFirst ? 5f : -5f, 0f, -4.5f),
+        _ => new(state.DarkFirst ? -5f : 5f, 0f, -4.5f),
     };
-
-    private Vector3 JpFirstWingSpot(PartyRole role)
-    {
-        if (role == PartyRole.MainTank) return new(0f, 0f, -7f);
-        if (role == PartyRole.OffTank) return state.DarkFirst ? new(-1f, 0f, 0f) : new(10f, 0f, 10f);
-        var sign = state.DarkFirst ? -1f : 1f;
-        return role is PartyRole.RegenHealer or PartyRole.ShieldHealer
-            ? new Vector3(sign * (0.6f + ((int)role % 2) * 0.4f), 0, 7f)
-            : new Vector3(sign * 3.5f, 0, 9.5f);
-    }
-
-    private Vector3 JpSecondWingSpot(PartyRole role)
-    {
-        if (role.IsTank()) return SecondWingSpot(role);
-        if (role is PartyRole.RegenHealer or PartyRole.ShieldHealer) return new((int)role % 2 == 0 ? -0.4f : 0.4f, 0f, -7.5f);
-        var melee = role is PartyRole.MeleeDpsA or PartyRole.MeleeDpsB;
-        var west = melee != state.DarkFirst;
-        return new(west ? -5f : 5f, 0f, -4.5f);
-    }
 
     private static int BaitOrder(PartyRole role) => role switch
     {

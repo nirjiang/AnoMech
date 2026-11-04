@@ -20,7 +20,7 @@ public sealed class FruP5ParadiseRegainedJpScenario : IScenario, IScenarioRegion
     public string Name => "Paradise Regained (JP)";
     public IPhase Phase => FruZone.P5;
 
-    public IReadOnlyList<IScenarioAi> AiStrats => [new FruP5ParadiseRegainedJpAi(jp: true)];
+    public IReadOnlyList<IScenarioAi> AiStrats => [new FruP5ParadiseRegainedJpAi()];
 
     public void DrawSettings() => settingsWindow.Draw();
     public object SettingsOverrides => settingsWindow.Overrides;

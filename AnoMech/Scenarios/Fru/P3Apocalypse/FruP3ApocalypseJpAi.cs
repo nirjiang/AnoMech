@@ -9,14 +9,20 @@ using static AnoMech.Scenarios.Fru.P3Apocalypse.FruP3ApocalypseState;
 
 namespace AnoMech.Scenarios.Fru.P3Apocalypse;
 
-public sealed class FruP3ApocalypseJpAi(bool jp = true, bool safeSpotReference = false) : IScenarioAi<FruP3ApocalypseState>
+public sealed class FruP3ApocalypseJpAi(bool safeSpotReference = false) : IScenarioAi<FruP3ApocalypseState>
 {
-    public string Name => jp
-        ? safeSpotReference ? "JP · Lily Doll / first safe spot / Z spreads / ST bait" : "JP · Lily Doll / first Apocalypse / Z spreads / ST bait"
-        : "NA priority / static spreads / OT bait";
-    public string Group => jp ? "JP" : "NA";
+    public string Name => safeSpotReference
+        ? "JP · Lily Doll / first safe spot / Z spreads / ST bait"
+        : "JP · Lily Doll / first Apocalypse / Z spreads / ST bait";
+    public string Group => "JP";
 
     private const float Scale = 20f / 47.4f;
+    private const float SetupRotation = 45f;
+
+    private static readonly int[] FirstApocalypseOctants = [0, 1, 6, 7];
+    private static readonly PartyRole[] SpreadPriority =
+        [PartyRole.MeleeDpsA, PartyRole.MeleeDpsB, PartyRole.MainTank, PartyRole.OffTank,
+         PartyRole.PhysRangedDps, PartyRole.RegenHealer, PartyRole.CasterDps, PartyRole.ShieldHealer];
 
     private FruP3ApocalypseState state = null!;
     private SimWorld world = null!;
@@ -64,8 +70,7 @@ public sealed class FruP3ApocalypseJpAi(bool jp = true, bool safeSpotReference =
     {
         get
         {
-            if (!jp) return (state.Clockwise ? new[] { -45, 0, -135, -90 } : new[] { -135, -90, -45, 0 })[state.Rotation];
-            var first = new[] { 0, 1, 6, 7 }[state.Rotation];
+            var first = FirstApocalypseOctants[state.Rotation];
             var safe = (first + (state.Clockwise ? 7 : 1)) % 8;
             if (safeSpotReference && safe is >= 2 and <= 5) safe = (safe + 4) % 8;
             return safe * 45;
@@ -74,10 +79,7 @@ public sealed class FruP3ApocalypseJpAi(bool jp = true, bool safeSpotReference =
 
     private int SpreadSlot(PartyRole role)
     {
-        if (!jp) return Slot(role, adjusted: false);
-        PartyRole[] priority = [PartyRole.MeleeDpsA, PartyRole.MeleeDpsB, PartyRole.MainTank, PartyRole.OffTank,
-            PartyRole.PhysRangedDps, PartyRole.RegenHealer, PartyRole.CasterDps, PartyRole.ShieldHealer];
-        var group = priority.Where(r => SupportGroup(r) == SupportGroup(role)).ToArray();
+        var group = SpreadPriority.Where(r => SupportGroup(r) == SupportGroup(role)).ToArray();
         return Array.IndexOf(group, role) + (SupportGroup(role) ? 0 : 4);
     }
 
@@ -94,10 +96,10 @@ public sealed class FruP3ApocalypseJpAi(bool jp = true, bool safeSpotReference =
         var local = slot % 4;
         var x = (local % 2 == 0 ? 1 : -1) * (support ? 1 : -1) * (spread ? 8 : 4);
         var z = (support ? -1 : 1) * (spread ? (local < 2 ? 9 : 27) : (local < 2 ? 8 : 16));
-        return Reference(x, z, jp ? 45 : 0);
+        return Reference(x, z, SetupRotation);
     }
 
-    private Vector3? FirstStack(PartyRole role) => Reference(0, SupportGroup(role) ? -12 : 12, jp ? 45 : 0);
+    private Vector3? FirstStack(PartyRole role) => Reference(0, SupportGroup(role) ? -12 : 12, SetupRotation);
 
     private Vector3? Spread(PartyRole role)
     {
@@ -123,10 +125,7 @@ public sealed class FruP3ApocalypseJpAi(bool jp = true, bool safeSpotReference =
 
     private Vector3 TankBait(bool near)
     {
-        if (jp) return Reference(near ? 10 : 30, near ? -10 : -30,
-            SpreadRotation + (state.Clockwise ? 0 : 90) + (SupportGroup(PartyRole.OffTank) ? 0 : 180));
-        var angle = (state.Clockwise ? new[] { -45, 0, -135, -90 } : new[] { -45, 0, 45, 90 })[state.Rotation];
-        if (Slot(PartyRole.OffTank) >= 4) angle += 180;
+        var angle = SpreadRotation + (state.Clockwise ? 0 : 90) + (SupportGroup(PartyRole.OffTank) ? 0 : 180);
         return Reference(near ? 10 : 30, near ? -10 : -30, angle);
     }
 

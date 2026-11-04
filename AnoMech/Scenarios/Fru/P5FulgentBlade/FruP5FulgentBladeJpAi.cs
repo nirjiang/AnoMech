@@ -7,10 +7,10 @@ using AnoMech.Core.SimObjects;
 
 namespace AnoMech.Scenarios.Fru.P5FulgentBlade;
 
-public sealed class FruP5FulgentBladeJpAi(bool jp = true) : IScenarioAi<FruP5FulgentBladeState>
+public sealed class FruP5FulgentBladeJpAi : IScenarioAi<FruP5FulgentBladeState>
 {
-    public string Name => jp ? "JP · Nukemaru / MT party left, ST party right" : "Standard";
-    public string Group => jp ? "JP" : "NA";
+    public string Name => "JP · Nukemaru / MT party left, ST party right";
+    public string Group => "JP";
 
     private const float FruSimUnitsToYalms = 5f / 11.855f;
 
@@ -51,8 +51,7 @@ public sealed class FruP5FulgentBladeJpAi(bool jp = true) : IScenarioAi<FruP5Ful
     {
         var outward = Vector3.Normalize(state.Origin);
         var bossLeft = new Vector3(outward.Z, 0f, -outward.X);
-        var mainTankParty = (int)role % 2 == 0;
-        var side = jp ? mainTankParty ? 1f : -1f : mainTankParty ? -1f : 1f;
+        var side = (int)role % 2 == 0 ? 1f : -1f;
         return outward * (14.6f * FruSimUnitsToYalms) + bossLeft * (side * 9.6f * FruSimUnitsToYalms);
     }
 

@@ -9,22 +9,27 @@ using static AnoMech.Scenarios.Fru.P2LightRampant.FruP2LightRampantJpState;
 
 namespace AnoMech.Scenarios.Fru.P2LightRampant;
 
-public sealed class FruP2LightRampantJpAi(bool jp = true) : IScenarioAi<FruP2LightRampantJpState>
+public sealed class FruP2LightRampantJpAi : IScenarioAi<FruP2LightRampantJpState>
 {
-    public string Name => jp ? "JP · Lily Doll HT / ST-D4 adjust / clockwise puddles" : "NA · Conga";
-    public string Group => jp ? "JP" : "NA";
+    public string Name => "JP · Lily Doll HT / ST-D4 adjust / clockwise puddles";
+    public string Group => "JP";
 
     private const float S = 1f / 2.358f;
 
+    private static readonly PartyRole[] LineupPriority =
+        [PartyRole.RegenHealer, PartyRole.ShieldHealer, PartyRole.MainTank, PartyRole.OffTank,
+         PartyRole.MeleeDpsA, PartyRole.MeleeDpsB, PartyRole.PhysRangedDps, PartyRole.CasterDps];
+    private static readonly int[] LineupTowers = [0, 1, 2, 5, 4, 3, 6, 7];
+
     private FruP2LightRampantJpState state = null!;
     private SimWorld world = null!;
-    private readonly int[] jpSlots = new int[8];
+    private readonly int[] slots = new int[8];
 
     public void Run(FruP2LightRampantJpState stateParam, SimWorld worldParam)
     {
         state = stateParam;
         world = worldParam;
-        AssignJpLineup();
+        AssignLineup();
         var ai = new AiManager(world);
         ai.Move(3f, () => ByRole(Preposition), arrivalTime: 8.75f);
         ai.Move(9.75f, () => ByRole(role => state.BaitsHammer(role) ? Lineup(role) : null), arrivalTime: HammerSnapshotAt(0));
@@ -53,23 +58,20 @@ public sealed class FruP2LightRampantJpAi(bool jp = true) : IScenarioAi<FruP2Lig
 
     private static Vector3 FromSim(float north, float east) => new(east * S, 0, -north * S);
 
-    private void AssignJpLineup()
+    private void AssignLineup()
     {
-        PartyRole[] priority = [PartyRole.RegenHealer, PartyRole.ShieldHealer, PartyRole.MainTank, PartyRole.OffTank,
-            PartyRole.MeleeDpsA, PartyRole.MeleeDpsB, PartyRole.PhysRangedDps, PartyRole.CasterDps];
-        var north = priority.Take(4).Where(r => !state.BaitsHammer(r)).ToList();
-        var south = priority.Skip(4).Where(r => !state.BaitsHammer(r)).ToList();
+        var north = LineupPriority.Take(4).Where(r => !state.BaitsHammer(r)).ToList();
+        var south = LineupPriority.Skip(4).Where(r => !state.BaitsHammer(r)).ToList();
         if (north.Count == 4) { south.Add(north[^1]); north.RemoveAt(3); }
         if (south.Count == 4) { north.Add(south[^1]); south.RemoveAt(3); }
-        var order = north.Concat(south).Concat(priority.Where(state.BaitsHammer)).ToArray();
-        int[] towers = [0, 1, 2, 5, 4, 3, 6, 7];
-        for (var i = 0; i < 8; i++) jpSlots[(int)order[i]] = towers[i];
+        var order = north.Concat(south).Concat(LineupPriority.Where(state.BaitsHammer)).ToArray();
+        for (var i = 0; i < 8; i++) slots[(int)order[i]] = LineupTowers[i];
     }
 
-    private int Index(PartyRole role) => jp ? jpSlots[(int)role] : state.Index(role);
+    private int Index(PartyRole role) => slots[(int)role];
     private bool NorthGroup(PartyRole role) => Index(role) % 2 == 0;
 
-    private Vector3? Preposition(PartyRole role) => jp ? role switch
+    private static Vector3? Preposition(PartyRole role) => role switch
     {
         PartyRole.MainTank => FromSim(14.5f, 4.5f),
         PartyRole.OffTank => FromSim(11, 11),
@@ -79,19 +81,9 @@ public sealed class FruP2LightRampantJpAi(bool jp = true) : IScenarioAi<FruP2Lig
         PartyRole.MeleeDpsB => FromSim(-14.5f, -4.5f),
         PartyRole.PhysRangedDps => FromSim(-14.5f, 4.5f),
         _ => FromSim(-11, 11),
-    } : role switch
-    {
-        PartyRole.MainTank => FromSim(14.5f, 4.5f),
-        PartyRole.OffTank => FromSim(11, 11),
-        PartyRole.RegenHealer => FromSim(11, -11),
-        PartyRole.ShieldHealer => FromSim(14.5f, -4.5f),
-        PartyRole.MeleeDpsA => FromSim(-14.5f, 4.5f),
-        PartyRole.MeleeDpsB => FromSim(-11, 11),
-        PartyRole.PhysRangedDps => FromSim(-11, -11),
-        _ => FromSim(-14.5f, -4.5f),
     };
 
-    private Vector3? Lineup(PartyRole role) => jp && state.BaitsHammer(role) ? JpHammerSpot(role, 0) : Index(role) switch
+    private Vector3? Lineup(PartyRole role) => state.BaitsHammer(role) ? HammerSpot(role, 0) : Index(role) switch
     {
         0 => FromSim(7, 13.7f),
         1 => FromSim(16.1f, 0),
@@ -105,21 +97,21 @@ public sealed class FruP2LightRampantJpAi(bool jp = true) : IScenarioAi<FruP2Lig
 
     private Vector3? HammerSpot(PartyRole role, int dropped)
     {
-        if (jp) return JpHammerSpot(role, dropped);
-        var spot = dropped switch
+        var step = dropped switch
         {
-            1 => FromSim(0, -30),
-            2 => FromSim(0, -15),
-            3 => FromSim(15, -15),
-            _ => FromSim(30, -15),
+            0 => 0f,
+            1 => 1f,
+            2 => 1.7f,
+            3 => 2f,
+            _ => 2.3f,
         };
-        return state.Index(role) == 6 ? spot : -spot;
-    }
-
-    private Vector3 JpHammerSpot(PartyRole role, int dropped)
-    {
-        var octant = (Index(role) == 6 ? 5 : 1) + (dropped switch { 0 => 0f, 1 => 1f, 2 => 1.7f, 3 => 2f, _ => 2.3f });
-        var radius = dropped switch { < 3 => 8.5f, 3 => 12f, _ => 18f };
+        var octant = (Index(role) == 6 ? 5 : 1) + step;
+        var radius = dropped switch
+        {
+            < 3 => 8.5f,
+            3 => 12f,
+            _ => 18f,
+        };
         return new Vector3(MathF.Sin(octant * MathF.PI / 4), 0, -MathF.Cos(octant * MathF.PI / 4)) * radius;
     }
 
@@ -143,18 +135,18 @@ public sealed class FruP2LightRampantJpAi(bool jp = true) : IScenarioAi<FruP2Lig
         ? ClockSpot(role switch
         {
             PartyRole.MainTank => PartyRole.PhysRangedDps,
-            PartyRole.OffTank => jp ? PartyRole.MeleeDpsB : PartyRole.CasterDps,
+            PartyRole.OffTank => PartyRole.MeleeDpsB,
             PartyRole.RegenHealer => PartyRole.MeleeDpsA,
-            _ => jp ? PartyRole.CasterDps : PartyRole.MeleeDpsB,
+            _ => PartyRole.CasterDps,
         })
         : ClockSpot(role);
 
-    private Vector3? ClockSpot(PartyRole role) => role switch
+    private static Vector3? ClockSpot(PartyRole role) => role switch
     {
         PartyRole.MainTank => FromSim(18, 0),
-        PartyRole.OffTank => jp ? FromSim(-18, 0) : FromSim(0, 18),
+        PartyRole.OffTank => FromSim(-18, 0),
         PartyRole.RegenHealer => FromSim(0, -18),
-        PartyRole.ShieldHealer => jp ? FromSim(0, 18) : FromSim(-18, 0),
+        PartyRole.ShieldHealer => FromSim(0, 18),
         PartyRole.MeleeDpsA => FromSim(-12, -12),
         PartyRole.MeleeDpsB => FromSim(-12, 12),
         PartyRole.PhysRangedDps => FromSim(12, -12),

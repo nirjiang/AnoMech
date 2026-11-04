@@ -20,7 +20,7 @@ public sealed class FruP3UltimateRelativityJpScenario : IScenario, IScenarioRegi
     public string Name => "Ultimate Relativity (JP)";
     public IPhase Phase => FruZone.P3;
 
-    public IReadOnlyList<IScenarioAi> AiStrats => [new FruP3UltimateRelativityJpAi(jp: true)];
+    public IReadOnlyList<IScenarioAi> AiStrats => [new FruP3UltimateRelativityJpAi()];
 
     public void DrawSettings() => settingsWindow.Draw();
     public object SettingsOverrides => settingsWindow.Overrides;

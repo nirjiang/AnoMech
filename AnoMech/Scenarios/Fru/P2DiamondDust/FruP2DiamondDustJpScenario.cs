@@ -19,7 +19,7 @@ public sealed class FruP2DiamondDustJpScenario : IScenario, IScenarioRegionVaria
     public string Name => "Diamond Dust (JP)";
     public IPhase Phase => FruZone.P2;
 
-    public IReadOnlyList<IScenarioAi> AiStrats => [new FruP2DiamondDustJpAi(jp: true)];
+    public IReadOnlyList<IScenarioAi> AiStrats => [new FruP2DiamondDustJpAi()];
 
     public void DrawSettings() => settingsWindow.Draw();
     public object SettingsOverrides => settingsWindow.Overrides;

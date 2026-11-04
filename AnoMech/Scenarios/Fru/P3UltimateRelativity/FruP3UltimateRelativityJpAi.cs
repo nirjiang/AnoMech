@@ -4,23 +4,21 @@ using System.Linq;
 using System.Numerics;
 using AnoMech.Core.Game.Ai;
 using AnoMech.Core.Game.Party;
-using AnoMech.Core.SimObjects;
 using AnoMech.Core.Native.Interfaces;
+using AnoMech.Core.SimObjects;
 using static AnoMech.Scenarios.Fru.P3UltimateRelativity.FruP3UltimateRelativityState;
 
 namespace AnoMech.Scenarios.Fru.P3UltimateRelativity;
 
-public sealed class FruP3UltimateRelativityJpAi(bool jp = true) : IScenarioAi<FruP3UltimateRelativityState>
+public sealed class FruP3UltimateRelativityJpAi : IScenarioAi<FruP3UltimateRelativityState>
 {
-    public string Name => jp ? "JP · Atobe modified / yellow Y north" : "NA";
-    public string Group => jp ? "JP" : "NA";
+    public string Name => "JP · Atobe modified / yellow Y north";
+    public string Group => "JP";
 
     private const float S = 1f / 2.358f;
 
-    private static readonly PartyRole[] DpsPriority = [PartyRole.CasterDps, PartyRole.PhysRangedDps, PartyRole.MeleeDpsA, PartyRole.MeleeDpsB];
-    private static readonly PartyRole[] SupportPriority = [PartyRole.ShieldHealer, PartyRole.RegenHealer, PartyRole.MainTank, PartyRole.OffTank];
-    private static readonly PartyRole[] JpDpsPriority = [PartyRole.MeleeDpsA, PartyRole.MeleeDpsB, PartyRole.PhysRangedDps, PartyRole.CasterDps];
-    private static readonly PartyRole[] JpSupportPriority = [PartyRole.RegenHealer, PartyRole.ShieldHealer, PartyRole.MainTank, PartyRole.OffTank];
+    private static readonly PartyRole[] DpsPriority = [PartyRole.MeleeDpsA, PartyRole.MeleeDpsB, PartyRole.PhysRangedDps, PartyRole.CasterDps];
+    private static readonly PartyRole[] SupportPriority = [PartyRole.RegenHealer, PartyRole.ShieldHealer, PartyRole.MainTank, PartyRole.OffTank];
 
     private FruP3UltimateRelativityState state = null!;
 
@@ -29,7 +27,7 @@ public sealed class FruP3UltimateRelativityJpAi(bool jp = true) : IScenarioAi<Fr
         state = stateParam;
         var ai = new AiManager(world);
         ai.Move(1f, () => ByRole(CenterSpot));
-        if (jp) ai.Automarker(12f, RelativityMarkers);
+        ai.Automarker(12f, RelativityMarkers);
         ai.Move(19.2f, () => ByRole(role => FireSpot(role, 0)), arrivalTime: FireAt(0));
         ai.Move(23.9f, () => ByRole(role => BaitSpot(role, 0)), arrivalTime: ReturnAt(earlyReturn: true));
         LeaveLaserNowOthersArriveBy(ai, 28.6f, 0, role => FireSpot(role, 1, intermediate: true), arrivalTime: 30.6f);
@@ -78,16 +76,16 @@ public sealed class FruP3UltimateRelativityJpAi(bool jp = true) : IScenarioAi<Fr
         var debuff = state.Debuff(role);
         return debuff switch
         {
-            RelativityDebuff.ShortDps => IsWestOfPair(role, jp ? JpDpsPriority : DpsPriority) != jp ? 5 : 3,
+            RelativityDebuff.ShortDps => IsFirstOfPair(role, DpsPriority) ? 3 : 5,
             RelativityDebuff.ShortSupport => 0,
-            RelativityDebuff.MediumDps => jp ? 6 : 2,
-            RelativityDebuff.MediumSupport => jp ? 2 : 6,
-            RelativityDebuff.LongSupport => IsWestOfPair(role, jp ? JpSupportPriority : SupportPriority) ? jp ? 1 : 7 : jp ? 7 : 1,
+            RelativityDebuff.MediumDps => 6,
+            RelativityDebuff.MediumSupport => 2,
+            RelativityDebuff.LongSupport => IsFirstOfPair(role, SupportPriority) ? 1 : 7,
             _ => 4,
         };
     }
 
-    private bool IsWestOfPair(PartyRole role, PartyRole[] priority)
+    private bool IsFirstOfPair(PartyRole role, PartyRole[] priority)
         => priority.First(r => state.Debuff(r) == state.Debuff(role)) == role;
 
     private Vector3 Direction(PartyRole role) => state.Direction(Clock(role));
@@ -103,8 +101,7 @@ public sealed class FruP3UltimateRelativityJpAi(bool jp = true) : IScenarioAi<Fr
     private Vector3? FireSpot(PartyRole role, int wave, bool intermediate = false)
     {
         var fireWave = FruP3UltimateRelativityState.FireWave(state.Debuff(role));
-        if (!jp && wave == 0 && state.Debuff(role) == RelativityDebuff.ShortSupport && !state.DpsIce) return At(role, 20.5f * S);
-        if (jp && role == state.IceHolder) return At(role, 3f * S);
+        if (role == state.IceHolder) return At(role, 3f * S);
         return At(role, fireWave == wave ? (intermediate ? 20.5f : 32.5f) * S : 3f * S);
     }
 

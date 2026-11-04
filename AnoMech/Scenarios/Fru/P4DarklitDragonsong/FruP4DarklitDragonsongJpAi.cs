@@ -9,12 +9,10 @@ using static AnoMech.Scenarios.Fru.P4DarklitDragonsong.FruP4DarklitDragonsongJpS
 
 namespace AnoMech.Scenarios.Fru.P4DarklitDragonsong;
 
-public sealed class FruP4DarklitDragonsongJpAi(bool playerBaitsSomberDance, bool jp = true) : IScenarioAi<FruP4DarklitDragonsongJpState>
+public sealed class FruP4DarklitDragonsongJpAi(bool playerBaitsSomberDance) : IScenarioAi<FruP4DarklitDragonsongJpState>
 {
-    public string Name => jp
-        ? playerBaitsSomberDance ? "JP · Nukemaru HT / adjust before fans / you take Somber Dance" : "JP · Nukemaru HT / adjust before fans"
-        : playerBaitsSomberDance ? "NA · you take Somber Dance" : "NA";
-    public string Group => jp ? "JP" : "NA";
+    public string Name => playerBaitsSomberDance ? "JP · Nukemaru HT / adjust before fans / you take Somber Dance" : "JP · Nukemaru HT / adjust before fans";
+    public string Group => "JP";
 
     private const float S = 1f / 2.358f;
 
@@ -29,16 +27,13 @@ public sealed class FruP4DarklitDragonsongJpAi(bool playerBaitsSomberDance, bool
     {
         state = stateParam;
         world = worldParam;
-        lineup = jp ? JpLineup() : state.LineupOrder.ToArray();
+        lineup = ArrangeLineupFromChains();
         swapped = SwapFreeWaterToItsGroup();
         somberTank = ChooseSomberTank();
         var ai = new AiManager(world);
         ai.Move(2f, () => ByRole(OpeningBait), jitter: 0.15f, arrivalTime: 6.6f);
         ai.Move(6.65f, () => ByRole(OpeningSpread), arrivalTime: 8.8f);
-        if (jp)
-            ai.Move(8.9f, () => ByRole(JpLineupSpot), arrivalTime: 12f);
-        else
-            ai.Move(14.5f, () => ByRole(Lineup), arrivalTime: 24.2f);
+        ai.Move(8.9f, () => ByRole(Lineup), arrivalTime: 12f);
         ai.Move(24.2f, () => ByRole(role => Bowtie(role, lineup)), arrivalTime: 28.2f);
         ai.Move(28.2f, () => ByRole(role => Bowtie(role, swapped)), arrivalTime: TowersAt);
         ai.Move(33.1f, () => ByRole(SpiritTakerSpread), arrivalTime: 35.6f);
@@ -60,23 +55,30 @@ public sealed class FruP4DarklitDragonsongJpAi(bool playerBaitsSomberDance, bool
         return after;
     }
 
-    private PartyRole[] JpLineup()
+    private PartyRole[] ArrangeLineupFromChains()
     {
         var chained = state.LineupOrder.Take(4).ToArray();
-        var healer = chained.Single(r => r is PartyRole.RegenHealer or PartyRole.ShieldHealer);
+        var healer = Healer(chained);
         var tank = chained.Single(r => r.IsTank());
         var dps = chained.Where(r => r.IsDps()).OrderBy(r => r).ToArray();
         var free = Enum.GetValues<PartyRole>().Except(chained).ToArray();
         var freeDps = free.Where(r => r.IsDps()).OrderBy(r => r).ToArray();
-        PartyRole[] order = [healer, tank, dps[1], dps[0], free.Single(r => r is PartyRole.RegenHealer or PartyRole.ShieldHealer),
-            free.Single(r => r.IsTank()), freeDps[1], freeDps[0]];
-        var neighbors = Enumerable.Range(0, 4).Select(state.ChainLink)
-            .Where(link => link.Item1 == healer || link.Item2 == healer)
-            .Select(link => link.Item1 == healer ? link.Item2 : link.Item1).ToArray();
-        var opposite = chained.Single(r => r != healer && !neighbors.Contains(r));
-        var index = Array.IndexOf(order, opposite);
+        PartyRole[] order =
+            [healer, tank, dps[1], dps[0],
+             Healer(free), free.Single(r => r.IsTank()), freeDps[1], freeDps[0]];
+        var index = Array.IndexOf(order, OppositeInChain(chained, healer));
         (order[1], order[index]) = (order[index], order[1]);
         return order;
+    }
+
+    private static PartyRole Healer(PartyRole[] roles) => roles.Single(r => r is PartyRole.RegenHealer or PartyRole.ShieldHealer);
+
+    private PartyRole OppositeInChain(PartyRole[] chained, PartyRole role)
+    {
+        var neighbors = Enumerable.Range(0, 4).Select(state.ChainLink)
+            .Where(link => link.Item1 == role || link.Item2 == role)
+            .Select(link => link.Item1 == role ? link.Item2 : link.Item1).ToArray();
+        return chained.Single(r => r != role && !neighbors.Contains(r));
     }
 
     private PartyRole ChooseSomberTank()
@@ -88,6 +90,10 @@ public sealed class FruP4DarklitDragonsongJpAi(bool playerBaitsSomberDance, bool
 
     private Vector3 OraclePosition()
         => world.Children.OfType<SimEnemy>().FirstOrDefault(e => e.BNpcBaseId == BNpcBaseId.OracleP4)?.Position ?? Vector3.Zero;
+
+    private Vector3 OpeningBossPosition()
+        => world.Children.OfType<SimEnemy>().FirstOrDefault(e => e.BNpcBaseId == BNpcBaseId.UsurperP4)?.Position
+           ?? state.UsurperOpeningPosition;
 
     private Vector3 JustPastOracleFromCenter()
     {
@@ -111,10 +117,6 @@ public sealed class FruP4DarklitDragonsongJpAi(bool playerBaitsSomberDance, bool
 
     private static Vector3? Middle(PartyRole role) => FromSim((int)role % 2 * 0.3f, (int)role * 0.08f);
 
-    private Vector3 OpeningBossPosition()
-        => world.Children.OfType<SimEnemy>().FirstOrDefault(e => e.BNpcBaseId == BNpcBaseId.UsurperP4)?.Position
-           ?? state.UsurperOpeningPosition;
-
     private Vector3? OpeningBait(PartyRole role)
         => OpeningBossPosition() + new Vector3((int)role % 2 == 0 ? -10f : 10f, 0, 0);
 
@@ -122,18 +124,6 @@ public sealed class FruP4DarklitDragonsongJpAi(bool playerBaitsSomberDance, bool
         => OpeningBossPosition() + new Vector3((int)role % 2 == 0 ? -3f : 3f, 0, state.UsurperNorth ? 8f : -8f);
 
     private static Vector3? Lineup(PartyRole role) => role switch
-    {
-        PartyRole.MainTank => FromSim(4.5f, 5),
-        PartyRole.OffTank => FromSim(0.2f, 11.3f),
-        PartyRole.RegenHealer => FromSim(0.2f, -11.3f),
-        PartyRole.ShieldHealer => FromSim(4.5f, -5),
-        PartyRole.MeleeDpsA => FromSim(-25.5f, 5),
-        PartyRole.MeleeDpsB => FromSim(-21.2f, 11.3f),
-        PartyRole.PhysRangedDps => FromSim(-21.2f, -11.3f),
-        _ => FromSim(-25.5f, -5),
-    };
-
-    private static Vector3? JpLineupSpot(PartyRole role) => role switch
     {
         PartyRole.RegenHealer => FromSim(10.1f, -16.4f),
         PartyRole.ShieldHealer => FromSim(16.4f, -10.1f),

@@ -2,8 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
-using AnoMech.Core.Game.Ai;
 using AnoMech.Core.Game;
+using AnoMech.Core.Game.Ai;
 using AnoMech.Core.Game.Party;
 using AnoMech.Core.SimObjects;
 using static AnoMech.Scenarios.Fru.FruConstants;
@@ -12,25 +12,17 @@ using static AnoMech.Scenarios.Fru.P4CrystallizeTime.FruP4CrystallizeTimeState;
 
 namespace AnoMech.Scenarios.Fru.P4CrystallizeTime;
 
-public sealed class FruP4CrystallizeTimeJpAi(bool jp = true) : IScenarioAi<FruP4CrystallizeTimeState>
+public sealed class FruP4CrystallizeTimeJpAi : IScenarioAi<FruP4CrystallizeTimeState>
 {
-    public string Name => jp ? "JP · Nukemaru / red ice sprint / Y Return + anti-KB / ST solo" : "NA priority / 7-1 Akh Morn (MT solo)";
-    public string Group => jp ? "JP" : "NA";
+    public string Name => "JP · Nukemaru / red ice sprint / Y Return + anti-KB / ST solo";
+    public string Group => "JP";
 
     private const float RunSpeed = 6f;
-    private const float ReferenceScale = 10f / 23.74f;
-    private const float SpreadClearance = 6f;
-    private const float FragmentClearance = 9f;
     private const float AeroKnockbackEndsAt = 27.45f;
     private const float StopCleansingAt = 41.1f;
     private const float ArrivalMargin = 0.25f;
 
     private static readonly PartyRole[] Priority =
-        [PartyRole.ShieldHealer, PartyRole.RegenHealer, PartyRole.OffTank, PartyRole.MainTank,
-         PartyRole.MeleeDpsA, PartyRole.MeleeDpsB, PartyRole.PhysRangedDps, PartyRole.CasterDps];
-
-    private static readonly Vector3[] SpreadCandidates = CreateSpreadCandidates();
-    private static readonly PartyRole[] JpPriority =
         [PartyRole.RegenHealer, PartyRole.MainTank, PartyRole.OffTank, PartyRole.MeleeDpsA,
          PartyRole.MeleeDpsB, PartyRole.PhysRangedDps, PartyRole.CasterDps, PartyRole.ShieldHealer];
 
@@ -38,7 +30,6 @@ public sealed class FruP4CrystallizeTimeJpAi(bool jp = true) : IScenarioAi<FruP4
     private SimWorld world = null!;
     private readonly Dictionary<PartyRole, CrystallizeTimeAssignment> assignments = new();
     private readonly Dictionary<PartyRole, CrystallizeTimeAssignment> puddleTargets = new();
-    private readonly Dictionary<PartyRole, Vector3> spreadSpots = new();
     private readonly HashSet<PartyRole> knockedByAero = [];
     private readonly HashSet<PartyRole> holdingClaw = [];
     private readonly HashSet<PartyRole> holdingFang = [];
@@ -51,7 +42,6 @@ public sealed class FruP4CrystallizeTimeJpAi(bool jp = true) : IScenarioAi<FruP4
         world = worldParam;
         elapsed = 0f;
         puddleTargets.Clear();
-        spreadSpots.Clear();
         knockedByAero.Clear();
         holdingClaw.Clear();
         holdingFang.Clear();
@@ -83,9 +73,8 @@ public sealed class FruP4CrystallizeTimeJpAi(bool jp = true) : IScenarioAi<FruP4
             _ => POST_EXA_4_SW,
         }, arriveBy: 40.5f));
         world.Events.Add(StopCleansingAt, () => MoveEveryBot(RewindSpot, arriveBy: 42.5f));
-        if (jp) world.Events.Add(44.85f, SpreadJpSpiritTaker);
-        world.Events.Add(45.9f, spreadSpots.Clear);
-        if (jp) world.Events.Add(49.8f, UseKnockbackImmunity);
+        world.Events.Add(44.85f, SpreadForSpiritTaker);
+        world.Events.Add(49.8f, UseKnockbackImmunity);
         world.Events.Add(61.7f, () => MoveEveryBot(AkhMornSpot, arriveBy: 68.9f));
     }
 
@@ -99,7 +88,6 @@ public sealed class FruP4CrystallizeTimeJpAi(bool jp = true) : IScenarioAi<FruP4
             ReactToFangCleansed(bot, role);
         }
         ChasePuddles();
-        if (!jp && elapsed is >= 45.9f and < 48.5f) SpreadAwayFromPlayerForSpiritTaker();
     }
 
     private void AssignSidesByPriority()
@@ -117,7 +105,7 @@ public sealed class FruP4CrystallizeTimeJpAi(bool jp = true) : IScenarioAi<FruP4
             };
     }
 
-    private bool IsWestOfPair(PartyRole role) => (jp ? JpPriority : Priority).First(r => state.Debuff(r) == state.Debuff(role)) == role;
+    private bool IsWestOfPair(PartyRole role) => Priority.First(r => state.Debuff(r) == state.Debuff(role)) == role;
 
     private PartyRole RoleOf(CrystallizeTimeAssignment assignment) => assignments.First(a => a.Value == assignment).Key;
 
@@ -221,26 +209,24 @@ public sealed class FruP4CrystallizeTimeJpAi(bool jp = true) : IScenarioAi<FruP4
 
     private Vector3 RewindSpot(PartyRole role)
     {
-        if (jp)
+        var x = role switch
         {
-            var x = role switch { PartyRole.MainTank => -3.2f, PartyRole.OffTank => 3.2f, _ => 0f };
-            var z = role switch { PartyRole.MainTank => 10f, PartyRole.OffTank => 9.8f, _ => 9f + (int)role * 0.02f };
-            return new Vector3(x, 0, -z) * (state.North ? 1 : -1);
-        }
-        var groupOne = role is PartyRole.MainTank or PartyRole.RegenHealer or PartyRole.MeleeDpsA or PartyRole.PhysRangedDps;
-        var tank = role.IsTank();
-        var leadEast = state.Corner is CrystallizeCorner.NW or CrystallizeCorner.SE ? groupOne : !groupOne;
-        var front = tank ? 22.7f : 20.5f;
-        var back = tank ? 18.2f : 15.4f;
-        var north = (state.North ? 1 : -1) * (leadEast ? back : front);
-        var east = (state.East ? 1 : -1) * (leadEast ? front : back);
-        return new Vector3(east * ReferenceScale, 0, -north * ReferenceScale);
+            PartyRole.MainTank => -3.2f,
+            PartyRole.OffTank => 3.2f,
+            _ => 0f,
+        };
+        var z = role switch
+        {
+            PartyRole.MainTank => 10f,
+            PartyRole.OffTank => 9.8f,
+            _ => 9f + (int)role * 0.02f,
+        };
+        return new Vector3(x, 0, -z) * (state.North ? 1 : -1);
     }
 
-    private Vector3 AkhMornSpot(PartyRole role)
-        => role == (jp ? PartyRole.OffTank : PartyRole.MainTank) ? new Vector3(jp ? 9.3f : -9.3f, 0, 0) : Vector3.Zero;
+    private static Vector3 AkhMornSpot(PartyRole role) => role == PartyRole.OffTank ? new Vector3(9.3f, 0, 0) : Vector3.Zero;
 
-    private Vector3 JpSpiritTakerSpot(PartyRole role)
+    private Vector3 SpiritTakerSpot(PartyRole role)
     {
         var point = role switch
         {
@@ -256,7 +242,7 @@ public sealed class FruP4CrystallizeTimeJpAi(bool jp = true) : IScenarioAi<FruP4
         return state.North ? point : -point;
     }
 
-    private void SpreadJpSpiritTaker()
+    private void SpreadForSpiritTaker()
     {
         puddleTargets.Clear();
         foreach (var bot in Bots())
@@ -264,41 +250,12 @@ public sealed class FruP4CrystallizeTimeJpAi(bool jp = true) : IScenarioAi<FruP4
             var role = ((ISimPartyMember)bot).Role;
             ((ISimPartyMember)bot).UseSprint(4f);
             CancelPendingMove(role);
-            bot.MoveTo(JpSpiritTakerSpot(role), AiManager.SprintSpeed);
+            bot.MoveTo(SpiritTakerSpot(role), AiManager.SprintSpeed);
         }
     }
 
     private void UseKnockbackImmunity()
     {
         foreach (var bot in Bots()) bot.AddStatus(KnockbackImmunity.ArmsLength, 6f);
-    }
-
-    private static Vector3[] CreateSpreadCandidates()
-    {
-        var spots = new List<Vector3>();
-        for (var x = -18; x <= 18; x += 6)
-            for (var z = -18; z <= 18; z += 6)
-            {
-                var spot = new Vector3(x, 0, z);
-                if (spot.Length() <= 18.5f && Vector3.Distance(spot, FragmentPosition) >= FragmentClearance) spots.Add(spot);
-            }
-        return spots.ToArray();
-    }
-
-    private void SpreadAwayFromPlayerForSpiritTaker()
-    {
-        var player = world.Party.Player;
-        foreach (var bot in Bots().OrderBy(b => ((ISimPartyMember)b).Role))
-        {
-            var role = ((ISimPartyMember)bot).Role;
-            bool Clear(Vector3 spot) =>
-                (!player.IsAlive() || world.Party.IsBotDriven(player!) || Vector3.Distance(spot, player!.Position) >= SpreadClearance)
-                && spreadSpots.All(s => s.Key == role || Vector3.Distance(spot, s.Value) >= SpreadClearance);
-            if (spreadSpots.TryGetValue(role, out var current) && Clear(current)) continue;
-            var spot = SpreadCandidates.Where(Clear).OrderBy(c => Vector3.DistanceSquared(bot.Position, c)).Cast<Vector3?>().FirstOrDefault();
-            if (spot is not { } chosen) continue;
-            spreadSpots[role] = chosen;
-            bot.MoveTo(chosen, RunSpeed);
-        }
     }
 }
