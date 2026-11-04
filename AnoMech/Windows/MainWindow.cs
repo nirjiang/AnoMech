@@ -46,6 +46,7 @@ public unsafe class MainWindow : Window, IDisposable
     internal ScenarioPanelWindow ScenarioPanel { get; }
     internal PartyPanelWindow PartyPanel { get; }
     private readonly MultiplayerUi multiplayerUi;
+    private readonly ScenarioRegionMenu scenarioRegions;
     internal Vector2 ScenarioPanelAnchor { get; private set; }
     internal Vector2 RightPanelAnchor { get; private set; }
     internal float ScenarioPanelHeight { get; private set; }
@@ -126,6 +127,7 @@ public unsafe class MainWindow : Window, IDisposable
         ScenarioPanel = new ScenarioPanelWindow(this);
         PartyPanel = new PartyPanelWindow(this, Plugin.Multiplayer);
         multiplayerUi = new MultiplayerUi(plugin);
+        scenarioRegions = new ScenarioRegionMenu(Plugin.Game.Catalog);
         IsOpen = false;
         RestoreSelectedScenario();
 
@@ -319,7 +321,7 @@ public unsafe class MainWindow : Window, IDisposable
         {
             widest = Math.Max(widest, ImGui.CalcTextSize(zone.Name).X + style.IndentSpacing);
             foreach (var phase in Plugin.Game.Catalog.PhasesOf(zone))
-                foreach (var scenario in Plugin.Game.Catalog.ScenariosOf(phase))
+                foreach (var scenario in scenarioRegions.ScenariosOf(phase))
                     widest = Math.Max(widest, ImGui.CalcTextSize(scenario.DisplayName()).X + style.IndentSpacing);
         }
         var measured = widest
@@ -379,9 +381,9 @@ public unsafe class MainWindow : Window, IDisposable
         ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, buttonPadding);
         ImGui.PushStyleVar(ImGuiStyleVar.ButtonTextAlign, new Vector2(0f, 0.5f));
         foreach (var phase in Plugin.Game.Catalog.PhasesOf(zone))
-            foreach (var scenario in Plugin.Game.Catalog.ScenariosOf(phase))
+            foreach (var scenario in scenarioRegions.ScenariosOf(phase))
             {
-                var selected = _selectedScenario == scenario;
+                var selected = _selectedScenario is { } current && scenarioRegions.Primary(current) == scenario;
                 var mpUnsupported = inSession && !scenario.SupportsMultiplayer;
                 if (selected) PushSelectedScenarioStyle();
                 else PushScenarioHoverStyle();
@@ -405,7 +407,7 @@ public unsafe class MainWindow : Window, IDisposable
                     ImGui.PopStyleColor(2);
                 }
                 ImGui.PopID();
-                if (clicked) SelectScenario(scenario);
+                if (clicked) SelectScenario(scenarioRegions.Resolve(scenario, _stratGroupMemory.GetValueOrDefault(scenario)));
             }
         ImGui.PopStyleVar(2);
     }
@@ -439,7 +441,10 @@ public unsafe class MainWindow : Window, IDisposable
         if (_selectedWaymark < 0 || _selectedWaymark >= scenario.Phase.Zone.WaymarkPresets.Count)
             _selectedWaymark = 0;
         // Restore the last region picked for this scenario; ReconcileStrat snaps null to its first region.
-        _selectedStratGroup = _stratGroupMemory.GetValueOrDefault(scenario);
+        _selectedStratGroup = scenarioRegions.HasVariants(scenario)
+            ? scenarioRegions.DefaultRegion(scenario)
+            : _stratGroupMemory.GetValueOrDefault(scenario);
+        if (_selectedStratGroup is { } region) _stratGroupMemory[scenarioRegions.Primary(scenario)] = region;
         ReconcileStrat();
 
         if (persist)
@@ -452,13 +457,7 @@ public unsafe class MainWindow : Window, IDisposable
     private const string MpDisabledReason = "Disabled in a multiplayer session.";
 
     // Distinct, ordered region labels from the strats' IScenarioAi.Group; empty = ungrouped.
-    private static IReadOnlyList<string> StratGroups(IScenario scenario)
-    {
-        var groups = new List<string>();
-        foreach (var ai in scenario.AiStrats)
-            if (ai.Group is { } g && !groups.Contains(g)) groups.Add(g);
-        return groups;
-    }
+    private IReadOnlyList<string> StratGroups(IScenario scenario) => scenarioRegions.Groups(scenario);
 
     private void DrawMainContent()
     {
@@ -566,7 +565,8 @@ public unsafe class MainWindow : Window, IDisposable
             if (strats.Count > 1) _selectedStrat = Math.Clamp(_selectedStrat, 0, strats.Count - 1);
             return;
         }
-        if (!GroupsContain(groups, _selectedStratGroup)) _selectedStratGroup = groups[0];
+        if (!GroupsContain(groups, _selectedStratGroup))
+            _selectedStratGroup = scenarioRegions.DefaultRegion(scenario) ?? groups[0];
         var inRegion = RegionStrats(strats);
         if (inRegion.Count == 0) _selectedStrat = -1;
         else if (!inRegion.Contains(_selectedStrat)) _selectedStrat = inRegion[0];
@@ -576,12 +576,12 @@ public unsafe class MainWindow : Window, IDisposable
     {
         var inRegion = new List<int>();
         for (var i = 0; i < strats.Count; i++)
-            if (strats[i].Group == _selectedStratGroup) inRegion.Add(i);
+            if (scenarioRegions.Region(_selectedScenario!, strats[i]) == _selectedStratGroup) inRegion.Add(i);
         return inRegion;
     }
 
     // Mirrors the visibility rules of DrawStratSelector and DrawWaymarkSelector.
-    private static bool HasStratChoice(IScenario scenario) =>
+    private bool HasStratChoice(IScenario scenario) =>
         StratGroups(scenario).Count > 0 || scenario.AiStrats.Count > 1;
 
     private static bool HasWaymarkChoice(IScenario scenario) =>
@@ -608,6 +608,7 @@ public unsafe class MainWindow : Window, IDisposable
             ImGui.Spacing();
         }
 
+        scenario = _selectedScenario ?? scenario;
         if (ImGui.TreeNodeEx("Scenario settings###scenario-config-v3",
                 ImGuiTreeNodeFlags.FramePadding))
         {
@@ -651,7 +652,7 @@ public unsafe class MainWindow : Window, IDisposable
         ImGui.SameLine();
         ImGui.TextDisabled($"{scenario.Phase.Zone.Name} —");
         ImGui.SameLine(0f, 4f * uiScale);
-        ImGui.TextUnformatted(scenario.DisplayName());
+        ImGui.TextUnformatted(scenarioRegions.Primary(scenario).DisplayName());
         DrawRunStatus(game);
 
         var dividerColor = StyleColor(ImGuiCol.TextDisabled);
@@ -983,14 +984,17 @@ public unsafe class MainWindow : Window, IDisposable
             ImGui.PushID($"region{i}");
             if (ImGui.Button(group))
             {
+                var target = scenarioRegions.Resolve(_selectedScenario!, group);
+                if (target != _selectedScenario) SelectScenario(target);
                 _selectedStratGroup = group;
-                _stratGroupMemory[_selectedScenario!] = group; // remember across scenario switches
+                _stratGroupMemory[scenarioRegions.Primary(_selectedScenario!)] = group;
                 ReconcileStrat();
             }
             ImGui.PopID();
             if (selected) ImGui.PopStyleColor();
         }
 
+        strats = _selectedScenario!.AiStrats;
         var filtered = RegionStrats(strats);
         SettingsGrid.Row("Strategy:");
         if (filtered.Count == 0)
@@ -1014,7 +1018,7 @@ public unsafe class MainWindow : Window, IDisposable
         if (StratGroups(scenario).Count == 0) return true;
         var strats = scenario.AiStrats;
         return _selectedStrat >= 0 && _selectedStrat < strats.Count
-            && strats[_selectedStrat].Group == _selectedStratGroup;
+            && scenarioRegions.Region(scenario, strats[_selectedStrat]) == _selectedStratGroup;
     }
 
     private static bool GroupsContain(IReadOnlyList<string> groups, string? group)
