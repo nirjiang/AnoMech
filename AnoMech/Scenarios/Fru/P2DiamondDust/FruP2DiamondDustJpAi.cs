@@ -34,6 +34,7 @@ public sealed class FruP2DiamondDustJpAi : IScenarioAi<FruP2DiamondDustState>
         world = worldParam;
         puddles.Clear();
         var ai = new AiManager(world);
+        ai.Move(7.1f, () => ByRole(role => Point(Clocks[(int)role], 4.5f)), jitter: 0f);
         ai.Move(15.3f, () => ByRole(KickSpot), arrivalTime: 20.6f);
         ai.Move(20.7f, () => ByRole(StoneSpot), arrivalTime: 23.3f);
         ai.Move(23.35f, () => ByRole(KnockbackSpot), jitter: 0f, arrivalTime: 27.4f);
@@ -47,14 +48,22 @@ public sealed class FruP2DiamondDustJpAi : IScenarioAi<FruP2DiamondDustState>
         }
         ai.Move(HolyAt(HolyWaves), () => ByRole(IceSpot), arrivalTime: 39.9f);
         world.Events.Add(39.9f, FaceAwayFromGaze);
-        world.Events.Add(IceStart + 0.2f, () => SlideBots(behind: false, recovery: true));
-        world.Events.Add(45.05f, () => SlideBots(behind: state.Stillness));
-        world.Events.Add(47.4f, () => SlideBots(behind: !state.Stillness));
+        world.Events.Add(IceStart + 0.2f, SlideAcrossWhereMirrorBackIsOutOfReach);
+        world.Events.Add(FirstSlideAt, () => SlideBots(behind: state.Stillness));
+        world.Events.Add(SecondSlideAt, () => SlideBots(behind: !state.Stillness));
         world.Events.Add(IceEnd, puddles.Clear);
         ai.Move(IceEnd + 0.3f, () => ByRole(_ => new Vector3(0, 0, 4)));
     }
 
-    private bool Cursed => (state.MirrorOctant - state.FirstIcicle + 8) % 4 == 0;
+    private const float FirstSlideAt = 45.05f;
+    private const float SecondSlideAt = 47.4f;
+    private const float MaxHolyStepOctants = 0.6f;
+    private const float WalkingHolyStepOctants = 0.56f;
+    private const float MinHolyStepOctants = 0.35f;
+    private const float MaxWalkAfterLastHolyOctants = 1.2f;
+    private const float StopApproachOctants = 2f / (17 * MathF.PI / 4);
+    private const float StopApproachClearance = PuddleRadius + 1f;
+    private const float PuddleClearanceOctants = 0.6f;
 
     private static bool GroupOne(PartyRole role) => ((int)role & 1) == 0;
 
@@ -82,7 +91,7 @@ public sealed class FruP2DiamondDustJpAi : IScenarioAi<FruP2DiamondDustState>
 
     private float NeedleSafeEdgeOctant(PartyRole role)
     {
-        var holyOctant = KnockbackOctant(role) + (Cursed ? 1f / 3 : 0);
+        var holyOctant = KnockbackOctant(role);
         var stars = Enum.GetValues<PartyRole>().Where(state.Marked).Select(r => StoneSpot(r)!.Value).ToList();
         return Enumerable.Range(-50, 101)
             .Select(step => holyOctant + step / 50f * EdgeSearchOctants)
@@ -108,17 +117,55 @@ public sealed class FruP2DiamondDustJpAi : IScenarioAi<FruP2DiamondDustState>
         return clearance;
     }
 
-    private int RotationAroundRim(PartyRole role)
+    private int MirrorOctantsClockwise(PartyRole role) => (state.MirrorOctant - KnockbackOctant(role) + 8) % 8;
+
+    private int RotationAroundRim(PartyRole role) => MirrorOctantsClockwise(role) == 1 ? -1 : 1;
+
+    private float RimTravelOctants(PartyRole role) => (MirrorOctantsClockwise(role) % 4) switch
     {
-        if (Cursed) return 1;
-        var clockwiseDestination = Point(KnockbackOctant(role) + 2, 1);
-        return Vector3.Dot(clockwiseDestination, state.MirrorPosition) < 0 ? 1 : -1;
+        0 => 4 - PuddleClearanceOctants,
+        1 => 2,
+        3 => state.FirstIcicle == 3 && state.MirrorOctant == 2 ? 2 : 3,
+        var octants => octants,
+    };
+
+    private int GazeOctantsAlongRoute(PartyRole role)
+        => ((state.GazeOctant - KnockbackOctant(role)) * RotationAroundRim(role) + 16) % 8;
+
+    private float HolyStepOctants(PartyRole role, float rimTravel)
+    {
+        var full = MathF.Min(rimTravel == 3 ? WalkingHolyStepOctants : MaxHolyStepOctants, (rimTravel - PuddleClearanceOctants) / 3);
+        var gaze = GazeOctantsAlongRoute(role);
+        var gazeOnRoute = gaze >= PuddleClearanceOctants && gaze <= rimTravel;
+        var shortest = MathF.Min(full, MathF.Max(MinHolyStepOctants, (rimTravel - MaxWalkAfterLastHolyOctants) / 3));
+        var longest = gazeOnRoute ? MathF.Max(shortest, full * 0.8f) : full;
+        return Enumerable.Range(0, 11).Select(i => longest - i / 10f * (longest - shortest)).Distinct()
+            .OrderByDescending(step => gazeOnRoute ? Enumerable.Range(1, HolyWaves - 1).Min(wave => MathF.Abs(wave * step - gaze)) : 0)
+            .ThenByDescending(step => step)
+            .First(step => KeepsStopApproachesClear(role, step));
     }
 
-    private Vector3 HolySpot(PartyRole role, int step)
-        => Point(KnockbackOctant(role) + (Cursed ? 1f / 3 : 0) + RotationAroundRim(role) * step * 0.5f, 18);
+    private bool KeepsStopApproachesClear(PartyRole role, float step)
+        => new[] { PartyRole.MainTank, PartyRole.OffTank }.All(other =>
+        {
+            var stop = IceSpot(other)!.Value;
+            var approach = Point(KnockbackOctant(other) + RotationAroundRim(other) * (RimTravelOctants(other) - StopApproachOctants), 17);
+            return Enumerable.Range(0, HolyWaves).All(wave =>
+                DistanceToSegment(Point(KnockbackOctant(role) + RotationAroundRim(role) * wave * step, 18), approach, stop) >= StopApproachClearance);
+        });
 
-    private Vector3? IceSpot(PartyRole role) => HolySpot(role, Cursed ? 5 : 4) * (17f / 18);
+    private Vector3 HolySpot(PartyRole role, int step)
+    {
+        var rimTravel = RimTravelOctants(role);
+        var holyStep = HolyStepOctants(role, rimTravel);
+        var along = step < HolyWaves
+            ? step * holyStep
+            : MathF.Min(rimTravel, 3 * holyStep + (rimTravel == 3 ? holyStep : PuddleClearanceOctants));
+        return Point(KnockbackOctant(role) + RotationAroundRim(role) * along, 18);
+    }
+
+    private Vector3? IceSpot(PartyRole role)
+        => Point(KnockbackOctant(role) + RotationAroundRim(role) * RimTravelOctants(role), 17);
 
     private void RememberHolyPuddles(int wave)
     {
@@ -126,8 +173,8 @@ public sealed class FruP2DiamondDustJpAi : IScenarioAi<FruP2DiamondDustState>
             if (world.Party.Get(healer) is { } member && member.IsAlive()) puddles.Add((wave, member.Position));
     }
 
-    private IEnumerable<Vector3> LivePuddles()
-        => puddles.Where(p => PuddleFadesAt(p.Wave) > world.Events.Elapsed).Select(p => p.Position);
+    private IEnumerable<Vector3> LivePuddles(float at)
+        => puddles.Where(p => PuddleFadesAt(p.Wave) > at).Select(p => p.Position);
 
     private IEnumerable<SimCharacter> Bots()
         => world.Party.ActiveMembers().Where(world.Party.IsBotDriven).ToList();
@@ -141,16 +188,20 @@ public sealed class FruP2DiamondDustJpAi : IScenarioAi<FruP2DiamondDustState>
         }
     }
 
-    private void SlideBots(bool behind, bool recovery = false)
+    private void SlideBots(bool behind)
     {
         foreach (var bot in Bots())
-        {
-            var skip = recovery
-                ? !Cursed || Vector3.Dot(bot.Position, state.MirrorPosition) <= 0
-                : BehindMirror(bot.Position) == behind;
-            if (skip || SlideDestination(bot.Position, behind, prepareNextSlide: recovery) is not { } destination) continue;
-            bot.IceSlideTo(destination, SlideSeconds);
-        }
+            if (BehindMirror(bot.Position) != behind && SlideDestination(bot.Position, behind, world.Events.Elapsed) is { } destination)
+                bot.IceSlideTo(destination, SlideSeconds);
+    }
+
+    private void SlideAcrossWhereMirrorBackIsOutOfReach()
+    {
+        var backSlideAt = state.Stillness ? FirstSlideAt : SecondSlideAt;
+        foreach (var bot in Bots())
+            if (!BehindMirror(bot.Position) && SlideDestination(bot.Position, true, backSlideAt) == null
+                && SlideDestination(bot.Position, false, world.Events.Elapsed, backSlideAt) is { } destination)
+                bot.IceSlideTo(destination, SlideSeconds);
     }
 
     private bool BehindMirror(Vector3 position)
@@ -160,11 +211,11 @@ public sealed class FruP2DiamondDustJpAi : IScenarioAi<FruP2DiamondDustState>
             && Vector3.Dot(Vector3.Normalize(offset), Vector3.Normalize(state.MirrorPosition)) > MathF.Sqrt(0.5f);
     }
 
-    private Vector3? SlideDestination(Vector3 from, bool behind, bool prepareNextSlide = false)
+    private Vector3? SlideDestination(Vector3 from, bool behind, float at, float? thenBehindAt = null)
     {
         Vector3? best = null;
         var bestMargin = float.NegativeInfinity;
-        var live = LivePuddles().ToList();
+        var live = LivePuddles(at).ToList();
         for (var degree = 0; degree < 720; degree++)
         {
             var end = from + Point(degree / 90f, SlideDistance);
@@ -175,7 +226,7 @@ public sealed class FruP2DiamondDustJpAi : IScenarioAi<FruP2DiamondDustState>
             var backDot = Vector3.Dot(Vector3.Normalize(relative), Vector3.Normalize(state.MirrorPosition));
             var coneMargin = (behind ? backDot - MathF.Sqrt(0.5f) : MathF.Sqrt(0.5f) - backDot) * relative.Length();
             var margin = MathF.Min(MathF.Min(20 - end.Length(), clearance), coneMargin);
-            if (margin > bestMargin && (!prepareNextSlide || SlideDestination(end, true) != null))
+            if (margin > bestMargin && (thenBehindAt is not { } next || SlideDestination(end, true, next) != null))
             {
                 bestMargin = margin;
                 best = end;
