@@ -2,7 +2,9 @@ using AnoMech.Core.Game.Party;
 using AnoMech.Core.SimObjects;
 using AnoMech.Scenarios;
 using AnoMech.Scenarios.Fru;
+using AnoMech.Scenarios.Fru.P1Fatebreaker;
 using AnoMech.Scenarios.Fru.P4DarklitDragonsong;
+using AnoMech.Scenarios.Fru.P5CombatPreview;
 using AnoMech.Windows;
 using static AnoMech.Scenarios.Fru.FruConstants;
 
@@ -42,10 +44,45 @@ public class FruRegionMenuTests
     {
         var catalog = ScenarioCatalog.Create();
         var menu = new ScenarioRegionMenu(catalog);
-        var originals = catalog.Scenarios.Where(scenario => scenario.Phase.Zone is FruZone && scenario is not IScenarioRegionVariant).ToArray();
+        var originals = catalog.Scenarios.Where(scenario => scenario.Phase.Zone is FruZone && scenario is not IScenarioRegionVariant and not IDutyScenario).ToArray();
         Assert.That(originals, Has.Length.EqualTo(8));
         foreach (var phase in catalog.PhasesOf(FruZone.Instance))
-            Assert.That(menu.ScenariosOf(phase), Is.EqualTo(originals.Where(scenario => scenario.Phase == phase).ToArray()));
+            Assert.That(menu.ScenariosOf(phase).Where(scenario => scenario is not IDutyScenario), Is.EqualTo(originals.Where(scenario => scenario.Phase == phase).ToArray()));
+    }
+
+    [Test]
+    public void TheCombatPreviewIsOneMoreButtonOnP5Only()
+    {
+        var catalog = ScenarioCatalog.Create();
+        var menu = new ScenarioRegionMenu(catalog);
+        var preview = catalog.Scenarios.OfType<FruP5CombatPreviewScenario>().Cast<IDutyScenario>().Single();
+        Assert.That(preview.Name, Does.Contain("preview").And.Contain("experimental"));
+        Assert.That(preview.Phase, Is.SameAs(FruZone.P5));
+        Assert.That(preview.SupportsMultiplayer, Is.False);
+        Assert.That(preview, Is.Not.InstanceOf<IScenarioRegionVariant>());
+        Assert.That(menu.ScenariosOf(FruZone.P5).Count(scenario => ReferenceEquals(scenario, preview)), Is.EqualTo(1));
+        foreach (var phase in catalog.PhasesOf(FruZone.Instance).Where(phase => phase != FruZone.P5 && phase != FruZone.P1))
+            Assert.That(menu.ScenariosOf(phase), Has.None.InstanceOf<IDutyScenario>());
+    }
+
+    [Test]
+    public void TheP1StageLeadsItsOwnFirstPhaseAheadOfItsFiveGuideGroups()
+    {
+        var catalog = ScenarioCatalog.Create();
+        var menu = new ScenarioRegionMenu(catalog);
+        var stage = catalog.Scenarios.OfType<FruP1FatebreakerScenario>().Cast<IDutyScenario>().Single();
+        Assert.That(stage.Name, Does.Contain("experimental"));
+        Assert.That(stage.Phase, Is.SameAs(FruZone.P1));
+        Assert.That(stage.SupportsMultiplayer, Is.False);
+        Assert.That(stage, Is.Not.InstanceOf<IScenarioRegionVariant>());
+        Assert.That(stage.AiStrats.All(ai => ai.Group == "JP"), Is.True);
+        var drills = catalog.Scenarios.OfType<FruP1PracticeScenario>().ToArray();
+        Assert.That(drills, Has.Length.EqualTo(5));
+        Assert.That(menu.ScenariosOf(FruZone.P1), Is.EqualTo(new IScenario[] { stage }.Concat(drills)));
+        Assert.That(drills.Select(drill => drill.FullName()).Distinct().Count(), Is.EqualTo(drills.Length));
+        Assert.That(drills.All(drill => menu.DefaultRegion(drill) == "JP" && !((IScenario)drill).SupportsMultiplayer), Is.True);
+        Assert.That(catalog.PhasesOf(FruZone.Instance)[0], Is.SameAs(FruZone.P1));
+        Assert.That(catalog.Scenarios.OfType<IDutyScenario>().Count(), Is.EqualTo(2 + drills.Length));
     }
 
     [Test]

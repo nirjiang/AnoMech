@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
+using AnoMech.Core.Combat;
 using AnoMech.Core.Native.Interfaces;
 using AnoMech.Core.SimObjects;
 
@@ -38,6 +39,11 @@ public static class EnemyActionEffects
     // neither the packet nor any sheet column tells them apart, so read it off a replay.
     public static IEnemyActionEffect ApplyStatus(ushort statusId, float duration, bool delayToEffectResult = false, byte entryParam = 0)
         => new ApplyStatusEffect(statusId, duration, delayToEffectResult, entryParam);
+
+    // ApplyStatus that also stops the holder's movement but not their actions, whatever the sheet's
+    // Lock* flags say. For this application only: other uses of the id are unaffected.
+    public static IEnemyActionEffect ApplyRootingStatus(ushort statusId, float duration, byte entryParam = 0)
+        => new ApplyRootingStatusEffect(statusId, duration, entryParam);
 
     // Survivors only. atImpact: taken off with the EffectResult at TimingSpec.DamageDelay instead of
     // with the ActionEffect; read which off a replay.
@@ -129,10 +135,28 @@ internal sealed class DamageEffect(VulnSpec vulns, Severity severity, Distributi
             var target = hits[i];
             var (hit, reason) = split.Assign(ctx, hits, i, target);
             var hitSeverity = hit?.Severity ?? severity;
+            if (ctx.Combat is { } combat && combat.Tracks(target))
+            {
+                ApplyNumeric(ctx, combat, target, hit?.Vulns ?? vulns, hitSeverity, kind, reason);
+                continue;
+            }
             var cause = DamageCheck.LethalCause(target, hit?.Vulns ?? vulns, hitSeverity, kind, ctx.Party);
             ctx.ShowDamage(target, hitSeverity.FlyTextAmount(kills: cause != null), kind);
             if (cause != null) ctx.Kill(target, Explain(reason, cause));
         }
+    }
+
+    private static void ApplyNumeric(EnemyActionContext ctx, DutyCombat combat, SimCharacter target, VulnSpec hitVulns, Severity hitSeverity, DamageKind kind, string? reason)
+    {
+        if (DamageCheck.MechanicCause(target, hitVulns, hitSeverity, kind, ctx.Party) is { } cause)
+        {
+            ctx.ShowDamage(target, hitSeverity.FlyTextAmount(kills: true), kind);
+            ctx.Kill(target, Explain(reason, cause));
+            return;
+        }
+        var amount = combat.SnapshotHit(target, ctx.Action, hitSeverity, kind);
+        ctx.AddNumericHit(target, amount);
+        ctx.ShowDamage(target, amount, kind);
     }
 
     // `cause` "" kills with no explanation of its own.
@@ -147,6 +171,19 @@ internal sealed class ApplyStatusEffect(ushort statusId, float duration, bool de
         foreach (var target in hits)
             if (!ctx.IsKilled(target) && target.IsAlive())
                 ctx.AddStatus(target, statusId, duration, delayToEffectResult: delayToEffectResult, entryParam: entryParam);
+    }
+}
+
+internal sealed class ApplyRootingStatusEffect(ushort statusId, float duration, byte entryParam) : IEnemyActionEffect
+{
+    private readonly ApplyStatusEffect apply = new(statusId, duration, delayToEffectResult: false, entryParam);
+
+    public void Apply(EnemyActionContext ctx, IReadOnlyList<SimCharacter> hits)
+    {
+        apply.Apply(ctx, hits);
+        foreach (var target in hits)
+            if (!ctx.IsKilled(target) && target.IsAlive() && target.FindStatus(statusId) is { } status)
+                status.RootsMovement = true;
     }
 }
 

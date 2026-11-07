@@ -40,6 +40,9 @@ public static class FruConstants
 
     public static class WeatherId
     {
+        public const byte P1 = 2;
+        // Utopian Sky's fog.
+        public const byte P1Fog = 4;
         public const byte Usurper = 35;
         public const byte Oracle = 105;
         // Ultimate Relativity and Crystallize Time, while time is stopped.
@@ -112,6 +115,10 @@ public static class FruConstants
 
     public static class BNpcBaseId
     {
+        public const uint Fatebreaker = 17819;
+        public const uint FatebreakersImage = 17820;
+        public const uint HaloOfFlame = 17821;
+        public const uint HaloOfLevin = 17822;
         public const uint UsurperP2 = 17823;
         public const uint FrozenMirror = 17824;
         public const uint HolyLight = 17826;
@@ -142,6 +149,10 @@ public static class FruConstants
 
     public static class BNpcNameId
     {
+        public const uint Fatebreaker = 9707;
+        public const uint FatebreakersImage = 9708;
+        public const uint HaloOfFlame = 9710;
+        public const uint HaloOfLevin = 9711;
         public const uint Oracle = 9832;
         public const uint SorrowsHourglass = 9823;
         public const uint DelightsHourglass = 9825;
@@ -177,6 +188,8 @@ public static class FruConstants
 
     public static class LayoutId
     {
+        public const uint HaloOfFlame = 0xA55BF6;
+        public const uint HaloOfLevin = 0xA55BF7;
         public const uint UsurperP2 = 0xA55BF8;
         public const uint FrozenMirror = 0xA55BF9;
         public const uint HolyLight = 0xA55BFA;
@@ -203,6 +216,63 @@ public static class FruConstants
         // Unnamed; the Oracle uses it before walking back to the centre.
         public const uint OracleReposition = 40117;
         public const uint DrachenArmor = 40186;
+
+        // -- P1 --
+        public const uint FatebreakerAutoAttack = 40116;
+        public const uint PowderMarkTrail = 40168;
+        public const uint BurnMark = 40169;
+        public const uint BurnishedGlory = 40170;
+        // The sheet names this row Burnished Glory too.
+        public const uint FatebreakerEnrage = 40128;
+        public const uint CyclonicBreakBossStack = 40144;
+        public const uint CyclonicBreakBossSpread = 40148;
+        public const uint CyclonicBreakImageStack = 40329;
+        public const uint CyclonicBreakImageSpread = 40330;
+        public const uint CyclonicBreakFirst = 40145;
+        public const uint CyclonicBreakRest = 40146;
+        public const uint CyclonicBreakSinsmoke = 40147;
+        public const uint CyclonicBreakSinsmite = 40149;
+        public const uint UtopianSkyStack = 40154;
+        public const uint UtopianSkySpread = 40155;
+        public const uint BlastingZone = 40157;
+        public const uint BlastingZoneCast = 40158;
+        public const uint SinboundFire = 40159;
+        public const uint SinboundThunder = 40160;
+        public const uint TurnOfHeavensFire = 40150;
+        public const uint TurnOfHeavensLightning = 40151;
+        public const uint TurnOfHeavensBurntStrikeFire = 40161;
+        public const uint TurnOfHeavensBlastburn = 40162;
+        public const uint TurnOfHeavensBurntStrikeLightning = 40163;
+        public const uint TurnOfHeavensBurnout = 40164;
+        public const uint BrightfireSmall = 40152;
+        public const uint BrightfireLarge = 40153;
+        public const uint BoundOfFaith = 40165;
+        public const uint FloatingFetters = 40171;
+        public const uint TurnOfHeavensSolemnCharge = 40166;
+        public const uint BoundOfFaithSinsmoke = 40167;
+        public const uint FatedBurnMark = 40331;
+        public const uint FallOfFaithFire = 40137;
+        public const uint FallOfFaithLightning = 40140;
+        public const uint FallOfFaithApply = 40172;
+        public const uint FallOfFaithSolemnChargeFire = 40138;
+        public const uint FallOfFaithSolemnChargeLightning = 40141;
+        public const uint FallOfFaithSinsmite = 40142;
+        public const uint FallOfFaithBowShock = 40143;
+        public const uint FallOfFaithSinblaze = 40156;
+        public const uint ExplosionBurntStrikeFire = 40129;
+        public const uint ExplosionBlastburn = 40130;
+        public const uint ExplosionBurntStrikeLightning = 40133;
+        public const uint ExplosionBurnout = 40134;
+        public const uint ExplosionFireOne = 40131;
+        public const uint ExplosionFireTwo = 40122;
+        public const uint ExplosionFireThree = 40123;
+        public const uint ExplosionFireFour = 40124;
+        public const uint ExplosionLightningOne = 40135;
+        public const uint ExplosionLightningTwo = 40125;
+        public const uint ExplosionLightningThree = 40126;
+        public const uint ExplosionLightningFour = 40127;
+        public const uint UnmitigatedExplosionFire = 40132;
+        public const uint UnmitigatedExplosionLightning = 40136;
 
         // -- P2 Diamond Dust --
         public const uint MirrorImage = 40180;
@@ -334,6 +404,12 @@ public static class FruConstants
 
     public static class StatusId
     {
+        public const ushort PowderMarkTrail = 4166;
+        public const ushort FatedBurnMark = 4165;
+        public const ushort FloatingFetters = 2304;
+        public const ushort Prey = 1051;
+        public const ushort Concealed = 1621;
+        public const ushort MarkOfMortality = 4372;
         public const ushort ThinIce = 911;
         public const ushort Levitation = 1390;
         public const ushort Incurable = 2398;
@@ -383,6 +459,8 @@ public static class FruConstants
 
     public static class TetherId
     {
+        public const ushort FatebreakerFire = 249;
+        public const ushort FatebreakerLightning = 287;
         public const ushort ChainsOfEverlastingLight = 110;
         public const ushort CurseOfEverlastingLight = 111;
         public const ushort Slow = 133;
@@ -408,6 +486,9 @@ public static class FruConstants
 
     public static class KnockbackId
     {
+        // UNVERIFIED which row: no sheet links Blastburn to one. Rows 80 and 113 both push 15y along
+        // the caster's facing at speed 30.
+        public const uint Blastburn = 113;
         public const uint HeavenlyStrike = 156;
         public const uint DarkestDance = 201;
         public const uint DarkAero = 139;

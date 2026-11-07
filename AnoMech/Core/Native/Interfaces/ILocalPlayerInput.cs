@@ -28,6 +28,10 @@ public interface ILocalPlayerInput : IDisposable
     // or sprint speed the sim expects, which a headless client moves them at.
     void Steer(System.Numerics.Vector2? direction, float speed);
 
+    // True blocks walking input for a short lease, to be renewed every tick, so a sim that stops
+    // ticking can't trap the player; false ends it at once. Actions and turning stay free.
+    void RefreshMovementBlock(bool blocked);
+
     // Asked whenever the client settles which action a button is, how long a spell casts and why an
     // action can't be used, to stand in for state the firewall keeps from it; null keeps the game's
     // own answer. AdjustActionStatus is asked only about a refusal, and 0 lifts it; its flag says

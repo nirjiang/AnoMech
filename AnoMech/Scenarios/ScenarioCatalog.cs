@@ -1,11 +1,13 @@
 using System.Collections.Generic;
 using System.Linq;
+using AnoMech.Scenarios.Fru.P1Fatebreaker;
 using AnoMech.Scenarios.Fru.P2DiamondDust;
 using AnoMech.Scenarios.Fru.P2LightRampant;
 using AnoMech.Scenarios.Fru.P3Apocalypse;
 using AnoMech.Scenarios.Fru.P3UltimateRelativity;
 using AnoMech.Scenarios.Fru.P4CrystallizeTime;
 using AnoMech.Scenarios.Fru.P4DarklitDragonsong;
+using AnoMech.Scenarios.Fru.P5CombatPreview;
 using AnoMech.Scenarios.Fru.P5FulgentBlade;
 using AnoMech.Scenarios.Fru.P5ParadiseRegained;
 using AnoMech.Scenarios.Top.P2PartySynergy;
@@ -80,6 +82,7 @@ public sealed class ScenarioCatalog
         new UmadP5CelestriadScenario(),
         new UmadP5ExaflaresScenario(),
         new UmadP5ForsakenNull(),
+        new FruP1FatebreakerScenario(),
         new FruP2DiamondDustScenario(),
         new FruP2DiamondDustJpScenario(),
         new FruP2LightRampantScenario(),
@@ -96,6 +99,7 @@ public sealed class ScenarioCatalog
         new FruP5FulgentBladeJpScenario(),
         new FruP5ParadiseRegainedScenario(),
         new FruP5ParadiseRegainedJpScenario(),
+        new FruP5CombatPreviewScenario(),
         new TopP2PartySynergyScenario(),
         new TopP5DeltaScenario(),
         new TopP5SigmaScenario(),
@@ -104,5 +108,10 @@ public sealed class ScenarioCatalog
         new UltimatePredationScenario(),
         new UltimateSuppressionScenario(),
         new UcobP5ExaflaresScenario(),
+        new FruP1CyclonicBreakBossPractice(),
+        new FruP1UtopianSkyPractice(),
+        new FruP1TurnOfTheHeavensPractice(),
+        new FruP1FallOfFaithPractice(),
+        new FruP1ExplosionPractice(),
     ]);
 }

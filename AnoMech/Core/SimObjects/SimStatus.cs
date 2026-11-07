@@ -25,6 +25,9 @@ public sealed class SimStatus : ISimObject
     // only shows the client with the action's EffectResult.
     internal bool Hidden { get; private set; }
 
+    // Stops movement while active, for a status whose sheet row sets no Lock* flag.
+    internal bool RootsMovement { get; set; }
+
     // 0 = permanent until removed.
     public float RemainingTime => duration > 0f ? Math.Max(0f, duration - elapsed) : 0f;
 

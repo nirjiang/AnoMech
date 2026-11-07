@@ -45,6 +45,10 @@ public sealed record CastSpec
 
     // False for an action retail fires at a target without turning the caster to it.
     public bool FaceTarget { get; init; } = true;
+
+    // For an action retail delivers to its own caster so the animation plays: it lists the caster
+    // with only an ActionMarker, no damage or status.
+    public bool IncludeCasterInEffectTargets { get; init; }
 }
 
 // The sheet's area is enough for most actions; customize it here when it isn't.

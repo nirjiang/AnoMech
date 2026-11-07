@@ -1,4 +1,5 @@
 using System.Numerics;
+using System.Runtime.CompilerServices;
 using AnoMech.Core.Game;
 using AnoMech.Core.Native.Interfaces;
 using FFXIVClientStructs.FFXIV.Client.Game.Character;
@@ -242,7 +243,13 @@ internal sealed class FakeBattleChara(FakeBattleCharas owner, int slot) : IBattl
         a.Statuses = now;
         a.Health = health;
         a.Mana = mana;
+        Shields.AddOrUpdate(a, new StrongBox<byte>(shield));
     }
+
+    // The gold overlay the last status list asked for; proxies come and go, so it lives by actor.
+    private static readonly ConditionalWeakTable<FakeCharacter, StrongBox<byte>> Shields = new();
+
+    public byte Shield => Actor is { } actor && Shields.TryGetValue(actor, out var shown) ? shown.Value : (byte)0;
 
     // ── Effects ──────────────────────────────────────────────────────────────
 

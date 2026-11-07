@@ -39,6 +39,18 @@ public sealed class Game : IDisposable
     private ScenarioSession? run;
     private ScenarioSession? endedRun;
 
+    // The running duty's params, and the seed the user asked for: EnterAndStart fixes a drawn seed
+    // into its params, which must not turn a random run into a fixed one on restart.
+    private RunScenarioParams? activeParams;
+    private int? seedIntent;
+    private (RunScenarioParams Entered, int? Intent)? enteredSeed;
+    // Moves whenever a run starts or ends or the stay does, so a start deferred past that can tell.
+    private int runGeneration;
+
+    // A Host's party wiped in a duty run. Nothing restarts it yet: multiplayer stays closed to those
+    // scenarios (SupportsMultiplayer) until the Start/Stop route is proven with them.
+    public event Action? DutyRestartRequested;
+
     public Game()
     {
         World = new SimWorld(Events);
@@ -64,7 +76,10 @@ public sealed class Game : IDisposable
             StartScenario(p, resolved);
             return;
         }
+        var intent = p.Seed;
+        var generation = runGeneration;
         p = p with { Seed = p.Seed ?? Random.Shared.Next() };
+        enteredSeed = (p, intent);
         ZoneIn(zone, mode, refusal =>
         {
             if (refusal != null)
@@ -73,7 +88,9 @@ public sealed class Game : IDisposable
                 return;
             }
             PrepareRunNow(p);
-            Plugin.Framework.RunOnTick(() => StartScenario(p, resolved), ZoneInStartDelay);
+            Plugin.Framework.RunOnTick(() => Deferred(
+                () => p.Scenario is IDutyScenario && generation != runGeneration ? "the run this start was for has moved on" : StartScenarioNow(p),
+                resolved), ZoneInStartDelay);
         });
     }
 
@@ -144,6 +161,9 @@ public sealed class Game : IDisposable
         if (ScenarioSession.Create(World, instance, p, out var refusal) is not { } next) return refusal;
 
         EndRun();
+        runGeneration++;
+        activeParams = p;
+        seedIntent = enteredSeed is { } entered && ReferenceEquals(entered.Entered, p) ? entered.Intent : p.Seed;
         run = next;
         run.Finished += OnRunFinished;
         run.MechanicFailed += OnMechanicFailed;
@@ -154,6 +174,8 @@ public sealed class Game : IDisposable
     
     private void EndRun()
     {
+        // Even with no run yet: a Reset during a start's delay calls that start off.
+        runGeneration++;
         if (run is { } ending)
         {
             run = null;
@@ -167,6 +189,7 @@ public sealed class Game : IDisposable
     private void ExitInstance()
     {
         if (instance is null) return;
+        runGeneration++;
         instance.Exit();
         instance = null;
         InstanceExited?.Invoke();
@@ -188,6 +211,31 @@ public sealed class Game : IDisposable
         Events.Tick(deltaSeconds * EventTimeScale);
         World.Tick(deltaSeconds * EventTimeScale);
         run?.Tick(deltaSeconds * EventTimeScale);
+        if (run is { } wiped && wiped.TakeRestartRequest()) RestartDuty(wiped);
+    }
+
+    // At the end of the tick, with no event, world or hook iteration above it to re-enter.
+    private void RestartDuty(ScenarioSession wiped)
+    {
+        if (wiped.Mode != SessionMode.Local)
+        {
+            DutyRestartRequested?.Invoke();
+            return;
+        }
+        if (activeParams is not { } p)
+        {
+            wiped.MarkRestartFailed("nothing to restart");
+            return;
+        }
+        try
+        {
+            if (StartScenarioNow(p with { Seed = seedIntent }) is { } refusal) wiped.MarkRestartFailed(refusal);
+        }
+        catch (Exception e)
+        {
+            DiagnosticLog.Warn($"[Game] Duty restart threw: {e}");
+            (run ?? wiped).MarkRestartFailed($"{e.GetType().Name} while loading");
+        }
     }
 
     // Reports the death even in godmode, so the user learns what would have killed them; only the
@@ -219,6 +267,8 @@ public sealed class Game : IDisposable
     // Framework.Run wrapper would never fire.
     public void Dispose()
     {
+        (run?.Scenario as IDutyScenario)?.OnRunEnded();
+        runGeneration++;
         run = null;
         Events.Clear();
         instance?.Dispose();

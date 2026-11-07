@@ -302,7 +302,20 @@ public abstract class SimCharacter : ISimObject, IPositioned
             if (status.IsActive && status.Slot >= 0 && !status.Hidden)
                 slots[status.Slot] = new StatusSlot(status.StatusId, status.Stacks, status.RemainingTime, (status.ShownSource ?? status.SourceObject).ObjectId);
         var shield = Mitigation.ShieldFraction(statusList.Where(s => s.IsActive).Select(s => s.StatusId));
-        chara.ReceiveStatusList(slots, health, mana, (byte)Math.Clamp(shield * 100f, 0f, 100f));
+        var shown = vitalsShield is { } numeric ? (Dead ? (byte)0 : numeric) : (byte)Math.Clamp(shield * 100f, 0f, 100f);
+        chara.ReceiveStatusList(slots, health, mana, shown);
+    }
+
+    // Set once a numeric ledger owns this character, so a later status change can't overwrite its
+    // shield with the practice table's.
+    private byte? vitalsShield;
+
+    // A numeric ledger's view on the native bars, in their own max. Whether the live party list and
+    // nameplates keep showing what this sends is UNVERIFIED.
+    internal void ShowVitals(uint health, uint mana, byte shield)
+    {
+        vitalsShield = shield;
+        SendStatusList(health, mana);
     }
 
     public void RemoveStatus(ushort statusId)
@@ -337,8 +350,10 @@ public abstract class SimCharacter : ISimObject, IPositioned
 
     // A status's Lock* flags don't stop anyone client-side: the local player only through the
     // server's conditions (SimPlayer), doppels not at all, so the sheet is read here.
-    public bool MovementLocked => AnyActiveStatusRow(row => row.LockMovement || row.LockControl);
+    public bool MovementLocked => HasMovementRoot || AnyActiveStatusRow(row => row.LockMovement || row.LockControl);
     public bool ActionsLocked => AnyActiveStatusRow(row => row.LockActions || row.LockControl);
+
+    internal bool HasMovementRoot => statusList.Exists(status => status.IsActive && status.RootsMovement);
 
     private protected bool AnyActiveStatusRow(Func<StatusRow, bool> predicate)
     {
@@ -401,6 +416,7 @@ public abstract class SimCharacter : ISimObject, IPositioned
     // A party member outlives the run: back on its feet at full HP, with nothing the run put on it.
     internal virtual void ClearRunState()
     {
+        vitalsShield = null;
         EndStatuses(null);
         if (ActorControl.Confused) ActorControl.SetConfused(false);
         confusedChaseHold = 0f;

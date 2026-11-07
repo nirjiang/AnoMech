@@ -26,6 +26,19 @@ internal sealed class FakeLocalPlayerInput : ILocalPlayerInput
         SteerSpeed = speed;
     }
 
+    // Records what the sim asked for. The lease's expiry and the walk it blocks live in the native
+    // detour, which never runs here.
+    public int MovementBlockRequests { get; private set; }
+    public int MovementBlockReleases { get; private set; }
+    public bool MovementBlocked { get; private set; }
+
+    public void RefreshMovementBlock(bool blocked)
+    {
+        if (blocked) MovementBlockRequests++;
+        else MovementBlockReleases++;
+        MovementBlocked = blocked;
+    }
+
     public Func<uint, uint?>? AdjustActionId { get; set; }
     public Func<ActionType, uint, int?>? AdjustCastTime { get; set; }
     public Func<ActionType, uint, bool, uint?>? AdjustActionStatus { get; set; }

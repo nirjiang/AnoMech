@@ -17,6 +17,7 @@ using SessionStatus = AnoMech.Core.Game.SessionStatus;
 using PracticeLoop = AnoMech.Core.Game.PracticeLoop;
 using AnoMech.Core.SimObjects;
 using AnoMech.Scenarios;
+using AnoMech.Scenarios.Fru;
 using static AnoMech.Core.Game.Game;
 using AnoMech.Core.Native.Implementations;
 
@@ -322,7 +323,7 @@ public unsafe class MainWindow : Window, IDisposable
             widest = Math.Max(widest, ImGui.CalcTextSize(zone.Name).X + style.IndentSpacing);
             foreach (var phase in Plugin.Game.Catalog.PhasesOf(zone))
                 foreach (var scenario in scenarioRegions.ScenariosOf(phase))
-                    widest = Math.Max(widest, ImGui.CalcTextSize(scenario.DisplayName()).X + style.IndentSpacing);
+                    widest = Math.Max(widest, ImGui.CalcTextSize(scenario.DisplayName()).X + style.IndentSpacing * (phase == FruZone.P1 ? 2 : 1));
         }
         var measured = widest
             + style.FramePadding.X * 2
@@ -381,6 +382,14 @@ public unsafe class MainWindow : Window, IDisposable
         ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, buttonPadding);
         ImGui.PushStyleVar(ImGuiStyleVar.ButtonTextAlign, new Vector2(0f, 0.5f));
         foreach (var phase in Plugin.Game.Catalog.PhasesOf(zone))
+        {
+            var isP1 = phase == FruZone.P1;
+            if (isP1)
+            {
+                // A restored P1 selection would otherwise sit hidden in a collapsed tree.
+                if (_selectedScenario?.Phase == phase) ImGui.SetNextItemOpen(true, ImGuiCond.Once);
+                if (!ImGui.TreeNodeEx("P1###scenario-p1-group", ImGuiTreeNodeFlags.FramePadding)) continue;
+            }
             foreach (var scenario in scenarioRegions.ScenariosOf(phase))
             {
                 var selected = _selectedScenario is { } current && scenarioRegions.Primary(current) == scenario;
@@ -409,6 +418,8 @@ public unsafe class MainWindow : Window, IDisposable
                 ImGui.PopID();
                 if (clicked) SelectScenario(scenarioRegions.Resolve(scenario, _stratGroupMemory.GetValueOrDefault(scenario)));
             }
+            if (isP1) ImGui.TreePop();
+        }
         ImGui.PopStyleVar(2);
     }
 

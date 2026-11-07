@@ -33,6 +33,7 @@ public sealed class SimPlayer : SimCharacter, ISimPartyMember
     {
         base.Tick(deltaSeconds);
         SyncStatusAffliction();
+        SyncMovementBlock();
         SampleActivity();
     }
 
@@ -45,6 +46,27 @@ public sealed class SimPlayer : SimCharacter, ISimPartyMember
         var conditions = Natives.PlayerConditions;
         if (conditions.StatusAffliction != status || conditions.ControlAffliction != control)
             conditions.SetAfflictions(status, control);
+    }
+
+    private bool movementBlockArmed;
+
+    // Only ever armed by a root, so a run without one never reaches the input hook.
+    private void SyncMovementBlock()
+    {
+        if (!HasMovementRoot)
+        {
+            ReleaseMovementBlock();
+            return;
+        }
+        Natives.PlayerInput.RefreshMovementBlock(true);
+        movementBlockArmed = true;
+    }
+
+    private void ReleaseMovementBlock()
+    {
+        if (!movementBlockArmed) return;
+        movementBlockArmed = false;
+        Natives.PlayerInput.RefreshMovementBlock(false);
     }
 
     private void SampleActivity()
@@ -67,6 +89,13 @@ public sealed class SimPlayer : SimCharacter, ISimPartyMember
     public void OnKilled(bool byEnvironment)
     {
         GoDown(byEnvironment);
+        ReleaseMovementBlock();
+    }
+
+    internal override void ClearRunState()
+    {
+        base.ClearRunState();
+        ReleaseMovementBlock();
     }
 
     public override void Despawn()
@@ -75,5 +104,6 @@ public sealed class SimPlayer : SimCharacter, ISimPartyMember
         Revive();
         if (Natives.PlayerConditions is { StatusAffliction: true } or { ControlAffliction: true })
             Natives.PlayerConditions.SetAfflictions(false, false);
+        ReleaseMovementBlock();
     }
 }

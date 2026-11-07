@@ -147,6 +147,7 @@ public sealed unsafe class LocalPlayerInputHooks : ILocalPlayerInput
 
     public void Dispose()
     {
+        movementBlockUntil = 0;
         rmiWalkHook?.Dispose();
         updateHook?.Dispose();
         useActionHook?.Dispose();
@@ -214,9 +215,25 @@ public sealed unsafe class LocalPlayerInputHooks : ILocalPlayerInput
 
     public void Steer(Vector2? direction, float speed)
         => steerDirection = direction is { } d && d.LengthSquared() > 0f ? Vector2.Normalize(d) : null;
+
+    private const long MovementBlockLeaseMilliseconds = 250;
+    private long movementBlockUntil;
+
+    public void RefreshMovementBlock(bool blocked)
+        => movementBlockUntil = blocked ? Environment.TickCount64 + MovementBlockLeaseMilliseconds : 0;
+
     private void RMIWalkDetour(void* self, float* sumLeft, float* sumForward, float* sumTurnLeft, byte* haveBackwardOrStrafe, byte* a6, byte bAdditiveUnk)
     {
         rmiWalkHook.Original(self, sumLeft, sumForward, sumTurnLeft, haveBackwardOrStrafe, a6, bAdditiveUnk);
+        // UNVERIFIED in game. A practice stand-in, not how retail roots a player. Both samples are
+        // cleared, and it comes before the steer so a walk already in progress can't override it.
+        if (Environment.TickCount64 < movementBlockUntil)
+        {
+            MovementInputActive = false;
+            *sumLeft = 0;
+            *sumForward = 0;
+            return;
+        }
         // self is a MoveControllerSubMemberForMine*; the sums are its move vector.
         MovementInputActive = *sumLeft != 0 || *sumForward != 0;
         // bAdditiveUnk != 0 is the game's second, additive sample; bossmod only steers the first.

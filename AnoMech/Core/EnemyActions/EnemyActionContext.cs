@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using AnoMech.Core.Combat;
 using AnoMech.Core.Game;
 using AnoMech.Core.Native.Interfaces;
 using AnoMech.Core.SimObjects;
@@ -14,6 +15,7 @@ public sealed class EnemyActionContext
     private readonly Dictionary<SimCharacter, TargetOutcome> outcomes = [];
     private readonly List<(SimStatus Status, float RevealAt)> hiddenStatuses = [];
     private readonly List<(SimCharacter, ushort)> impactRemovals = [];
+    private readonly List<(SimCharacter, uint)> numericHits = [];
 
     internal EnemyActionContext(EnemyAction action, SimCharacter caster, SimCharacter? target, Placement origin, SimParty party, float releaseDelay)
     {
@@ -39,6 +41,14 @@ public sealed class EnemyActionContext
 
     // The NPCs the area caught, the caster aside; effects reach them only through OnNpcs.
     public IReadOnlyList<SimEnemy> NpcHits { get; internal set; } = [];
+
+    // Set for a run that opted in to numeric combat.
+    internal DutyCombat? Combat { get; init; }
+
+    // Priced at this snapshot; taken from HP at TimingSpec.DamageDelay, so what lands between counts.
+    internal void AddNumericHit(SimCharacter who, uint amount) => numericHits.Add((who, amount));
+
+    internal IReadOnlyList<(SimCharacter Who, uint Amount)> NumericHits => numericHits;
 
     // Decided now; the character dies to this action after TimingSpec.DamageDelay. The first kill wins.
     public void Kill(SimCharacter who, string? explanation = null)

@@ -21,6 +21,21 @@ internal static class DamageCheck
         return vuln != null ? "not enough mitigation for a hit with vuln up" : "not enough mitigation";
     }
 
+    // What kills whatever the HP: a mechanic's own verdict, for a run that opted in to numeric combat.
+    // Null leaves the hit to the numbers. Spends nothing.
+    public static string? MechanicCause(SimCharacter target, VulnSpec spec, Severity severity, DamageKind kind, SimParty party)
+    {
+        if (spec.Protections.Any(id => target.FindStatus(id) != null)) return null;
+        if (severity.Kind == SeverityKind.Lethal) return MissingProtection(spec) ?? "";
+        var vuln = CarriedVulnerability(target, spec);
+        if (vuln is { RequiredMitigation: null }) return "had vuln up debuff";
+        if (severity.Kind == SeverityKind.TankBuster && !IsTank(target)) return "tank buster";
+        if (vuln?.RequiredMitigation is { } required && ChecksMitigation(target, party)
+            && Mitigation.Effective(target.ActiveStatusSnapshot.Select(s => s.StatusId), kind) < required - 0.0005f)
+            return "not enough mitigation for a hit with vuln up";
+        return null;
+    }
+
     private static string? MissingProtection(VulnSpec spec)
         => spec.Protections.Count > 0 ? $"no {Natives.Data.StatusName(spec.Protections[0])}" : null;
 

@@ -87,6 +87,16 @@ public readonly record struct Mitigation(
         return 1f - taken / pool;
     }
 
+    // What percentage reductions leave of a hit, 0..1. Shields and max HP aren't reductions.
+    public static float TakenFraction(IEnumerable<ushort> statusIds, DamageKind kind)
+    {
+        var taken = 1f;
+        foreach (var id in statusIds)
+            if (ByStatusId.TryGetValue(id, out var m))
+                taken *= (1f - m.Damage) * (1f - kind switch { DamageKind.Magic => m.Magic, DamageKind.Physical => m.Physical, _ => 0f });
+        return taken;
+    }
+
     // Banked shield as a fraction of max HP: what the gold overlay on the HP bar shows.
     public static float ShieldFraction(IEnumerable<ushort> statusIds)
     {

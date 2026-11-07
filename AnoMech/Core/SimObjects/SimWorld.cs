@@ -4,6 +4,7 @@ using System.Linq;
 using Dalamud.Game.Text;
 using System.Numerics;
 using AnoMech.Core;
+using AnoMech.Core.Combat;
 using AnoMech.Core.EnemyActions;
 using AnoMech.Core.Game;
 using AnoMech.Core.Game.Geometry;
@@ -38,6 +39,9 @@ public sealed class SimWorld : ISimObject, IDisposable
     // Root container — Game owns its lifetime; no parent reaps it.
     public bool IsActive => true;
     public EventScheduler Events { get; }
+    // Numeric HP and actions for a run that opted in; null runs the practice damage checks alone.
+    internal DutyCombat? Combat { get; set; }
+
     // The zone's origin for as long as an InstanceSession holds it; outlives the runs inside it.
     public Vector3 ScenarioOrigin { get; set; }
 

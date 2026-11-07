@@ -44,6 +44,8 @@ public sealed class FruP5FulgentBladeJpScenario : IScenario, IScenarioRegionVari
     private SimCharacter? akhMornLeftTarget;
     private SimCharacter? akhMornRightTarget;
 
+    internal SimEnemy? Pandora => pandora;
+
     public void Run(SimWorld worldParam, int? selectedAi)
     {
         world = worldParam;

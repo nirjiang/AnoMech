@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Dalamud.Game.Text;
+using AnoMech.Core.Combat;
 using AnoMech.Core.Game.Party;
 using AnoMech.Core.Native.Interfaces;
 using AnoMech.Core.SimObjects;
@@ -63,6 +64,13 @@ public sealed class ScenarioSession
 
     public IScenario Scenario => run.Scenario;
     public SessionMode Mode { get; }
+
+    // What this run's Start actually rolled from.
+    public int Seed { get; private set; }
+
+    private IDutyScenario? Duty => run.Scenario as IDutyScenario;
+    private bool restartRequested;
+    private bool restartConsumed;
 
     // Set once the post-first-death freeze timer fires; Game stops ticking the sim while true.
     public bool Paused { get; private set; }
@@ -148,6 +156,7 @@ public sealed class ScenarioSession
         world.PlaceWaymarks(ResolveWaymarks(zone, run.SelectedWaymark));
         // Before ApplyParty: the spawn ring draws from the run's party-spawn stream.
         var seed = run.Seed ?? Random.Shared.Next();
+        Seed = seed;
         world.Reseed(seed);
         world.Failed += OnMechanicFailed;
         Plugin.Log.Info($"Game: {Scenario.Name} seed {seed}");
@@ -170,6 +179,7 @@ public sealed class ScenarioSession
             catch (Exception e)
             {
                 DiagnosticLog.Warn($"[ScenarioSession.Start] zone/phase/scenario.Run threw -- scenario load aborted here: {e}");
+                Duty?.OnRunEnded();
                 throw;
             }
             if (Plugin.Config.EnableMechanicResultMarks) markHelper = world.SpawnEnemy(MarkHelper);
@@ -187,7 +197,49 @@ public sealed class ScenarioSession
         if (Mode == SessionMode.Peer) return;
         elapsed += deltaSeconds;
         Scenario.Tick(deltaSeconds, elapsed);
-        UpdateMechanicResult(deltaSeconds);
+        if (Duty is { } duty) UpdateDutyResult(duty);
+        else UpdateMechanicResult(deltaSeconds);
+    }
+
+    // Runs after the frame's events, world tick and hooks, so nothing here is iterating and the
+    // frame's deaths have all landed. The restart rule has no exception for a boss that fell the same
+    // frame.
+    private void UpdateDutyResult(IDutyScenario duty)
+    {
+        if (resultReported || restartRequested || restartConsumed || mechanicFailed) return;
+        if (instance.IsLoaded && DutyRestartPolicy.ShouldRestart(Mode, world.Party))
+        {
+            restartRequested = true;
+            return;
+        }
+        if (duty.VictoryReached)
+        {
+            resultReported = true;
+            world.Events.Clear();
+            duty.OnVictory();
+            var clean = lastMistakeElapsed is null;
+            if (clean) PlayMark(MechanicSuccessActionId);
+            Finished?.Invoke(clean);
+        }
+    }
+
+    // True once per run. The caller, at the end of its tick, owns acting on it.
+    internal bool TakeRestartRequest()
+    {
+        var requested = restartRequested;
+        restartRequested = false;
+        if (requested) restartConsumed = true;
+        return requested;
+    }
+
+    // The restart didn't happen: a stopped run says so, instead of playing on a wiped party or retrying.
+    internal void MarkRestartFailed(string reason)
+    {
+        Duty?.OnRunEnded();
+        mechanicFailed = true;
+        issues.Add(new RunIssue(elapsed, $"Restart failed: {reason}"));
+        Paused = true;
+        PrintFailureSummary();
     }
 
     // Infers a clean run from Events running dry and staying empty, rather than needing each
@@ -233,7 +285,9 @@ public sealed class ScenarioSession
         Plugin.ChatGui.Print(new XivChatEntry { Type = XivChatType.SystemMessage, Message = $"[AnoMech] Mechanic failed: {reason}" });
         MarkMistake();
         MechanicFailed?.Invoke(reason);
-        if (freeze) ScheduleFreeze();
+        // In a duty run a known failure is a mechanic's own action, so one reported here is not part
+        // of the fight: stop on it rather than invent a wipe or a restart.
+        if (freeze || Duty is not null) ScheduleFreeze();
     }
 
     private void MarkMistake()
@@ -258,6 +312,7 @@ public sealed class ScenarioSession
     // A death that took a member down; the first one freezes the run 5s later.
     public void OnKilled()
     {
+        if (Duty is not null) return;
         deathOccurred = true;
         ScheduleFreeze();
     }
@@ -278,6 +333,7 @@ public sealed class ScenarioSession
 
     public void End()
     {
+        Duty?.OnRunEnded();
         Ended = true;
         world.Failed -= OnMechanicFailed;
         world.Events.Clear();

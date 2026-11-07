@@ -111,6 +111,7 @@ internal sealed class EnemyActionHandler(SimCharacter caster, SimCast cast, SimW
         var outcomes = delivery.Outcomes.Where(o => o.Damage is not null || o.Push is not null || o.Dodged || o.StatusGains.Count > 0).ToList();
         var listed = new List<SimCharacter>();
         if (target is not null) listed.Add(target);
+        if (action.Cast.IncludeCasterInEffectTargets) listed.Add(caster);
         listed.AddRange(outcomes.Select(o => o.Target));
         var targets = new List<ActionEffectTarget>();
         var confirmations = new List<(SimCharacter Target, byte Index)>();
@@ -146,12 +147,15 @@ internal sealed class EnemyActionHandler(SimCharacter caster, SimCast cast, SimW
 
     private void Resolve(EnemyAction action, SimCharacter? target, Vector3? location, Delivery delivery, float releaseDelay)
     {
+        // The boss fell: no new snapshot. What an earlier one already scheduled still lands.
+        if (world.Combat is { ActionsOver: true }) return;
         var party = world.Party;
         var origin = target is not null && target != caster && IsDirectional(action)
             ? caster.Placement().Face(target.Position)
             : target?.Placement()
               ?? (location is { } at ? new Placement(at, caster.Rotation) : caster.Placement());
-        var ctx = new EnemyActionContext(action, caster, target, origin, party, releaseDelay);
+        var combat = world.Combat;
+        var ctx = new EnemyActionContext(action, caster, target, origin, party, releaseDelay) { Combat = combat };
 
         // A party member's own action never hits them.
         IReadOnlyList<SimCharacter> hits = IsSingleTarget(action)
@@ -175,9 +179,14 @@ internal sealed class EnemyActionHandler(SimCharacter caster, SimCast cast, SimW
         world.SimEvents.Raise(new ActionResolved(action, caster, origin, hits, ctx.NpcHits, hits.Where(ctx.IsKilled).ToList(), releaseDelay));
 
         delivery.Outcomes = ctx.Outcomes;
+        // Ahead of ConfirmDamage, which sends the HP the hit left.
+        foreach (var (who, amount) in ctx.NumericHits)
+            Schedule(action.Timing.DamageDelay, () => combat!.Commit(who, amount));
         // Ahead of the deaths it shares a time with, so the killing hit lands on a living target.
         if (ctx.Outcomes.Any(o => o.Damage is not null))
             Schedule(action.Timing.DamageDelay, () => ConfirmDamage(delivery));
+        foreach (var (who, _) in ctx.NumericHits)
+            Schedule(action.Timing.DamageDelay, () => combat!.DieIfAtZero(who, action));
         foreach (var (status, revealAt) in ctx.HiddenStatuses)
             Schedule(revealAt, status.Reveal);
         foreach (var (who, statusId) in ctx.ImpactRemovals)
@@ -202,7 +211,10 @@ internal sealed class EnemyActionHandler(SimCharacter caster, SimCast cast, SimW
                 });
             }
             if (outcome.Killed)
-                Schedule(action.Timing.DamageDelay, () => who.Die(action.ActionId, Explain(action.DeathExplanation, outcome.Explanation)));
+                Schedule(action.Timing.DamageDelay, () =>
+                {
+                    if (combat is not { Closed: true }) who.Die(action.ActionId, Explain(action.DeathExplanation, outcome.Explanation));
+                });
         }
     }
 

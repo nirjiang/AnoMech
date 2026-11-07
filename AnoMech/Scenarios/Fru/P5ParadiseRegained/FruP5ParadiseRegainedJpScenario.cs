@@ -35,6 +35,9 @@ public sealed class FruP5ParadiseRegainedJpScenario : IScenario, IScenarioRegion
     // Per round: where the light and the dark line point, from the center.
     private readonly (float Light, float Dark)?[] lineAims = new (float, float)?[4];
 
+    // The Pandora an earlier mechanic of the same fight already has on the field; this run spawns none.
+    internal SimEnemy? ExistingPandora { get; set; }
+
     public void Run(SimWorld worldParam, int? selectedAi)
     {
         world = worldParam;
@@ -92,6 +95,11 @@ public sealed class FruP5ParadiseRegainedJpScenario : IScenario, IScenarioRegion
 
     private void SpawnActors()
     {
+        if (ExistingPandora is { IsActive: true } existing)
+        {
+            pandora = existing;
+            return;
+        }
         pandora = world.SpawnEnemy(new EnemySpawnConfig(
             BNpcBaseId: BNpcBaseId.Pandora,
             NameId: BNpcNameId.Pandora,
@@ -108,6 +116,17 @@ public sealed class FruP5ParadiseRegainedJpScenario : IScenario, IScenarioRegion
         world.Map.AddEffect(MapEffect.TowerShow, slot);
         world.Map.AddEffect(MapEffect.TowerBase, (byte)(slot - MapEffect.ParadiseFirstTower + MapEffect.ParadiseFirstTowerBase));
         towers[tower] = new MapEffectTower(world.Map, slot, state.TowerPosition(tower), TowerRadius, MapEffect.TowerOccupied[..2], MapEffect.DarklitTowerEmpty);
+    }
+
+    // A fight that ended before its resolve: each tower still up goes as its resolve would take it.
+    internal void HideLiveTowers()
+    {
+        for (var tower = 0; tower < towers.Length; tower++)
+        {
+            if (towers[tower] is null) continue;
+            towers[tower] = null;
+            world.Map.AddEffect(MapEffect.TowerHide, state.TowerSlot(tower));
+        }
     }
 
     private void BattleTalk(uint line, uint speaker) => world.Map.DirectorUpdate(0x80000027U, line, 0x2U, speaker, NoActor);
