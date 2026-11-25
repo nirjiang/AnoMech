@@ -143,8 +143,8 @@ public sealed class UmadP3LimitCutAi : IScenarioAi<UmadP3LimitCutState>
     private IAiMove StackAtBosses()
     {
         var coords = new Vector2?[8];
-        coords[(int)PartyRole.MainTank] = Flat(OnCircle(Hold, 7.5f));
-        coords[(int)PartyRole.OffTank] = Flat(OnCircle(Hold, 9.1f) + OnCircle(Hold + MathF.PI / 2f, 2.5f));
+        coords[(int)state.ChaosTank] = Flat(OnCircle(Hold, 7.5f));
+        coords[(int)state.ExdeathTank] = Flat(OnCircle(Hold, 9.1f) + OnCircle(Hold + MathF.PI / 2f, 2.5f));
         for (var slot = 2; slot < 8; slot++) coords[slot] = StackSpot(slot);
         return AiMove.Create(coords).NaturalOrder();
     }
