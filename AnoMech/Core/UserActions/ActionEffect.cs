@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using AnoMech.Core.EnemyActions;
 using AnoMech.Core.Game.Party;
 using AnoMech.Core.Native.Implementations;
+using AnoMech.Core.Native.Interfaces;
 using AnoMech.Core.SimObjects;
 
 namespace AnoMech.Core.UserActions;
@@ -62,11 +64,13 @@ internal sealed class StatusEffect(ushort statusId, float duration, int stacks =
 }
 
 // A peer runs no scenario logic: the host decides who lives, from the statuses on its own copy
-// of each character. Only mitigation, the one kind of status the host acts on, and Sprint, which
-// every other client shows, are sent.
+// of each character. Only the statuses the host acts on (mitigation, knockback immunity) and Sprint,
+// which every other client shows, are sent.
 internal static class HostReport
 {
-    public static bool IsReported(ushort statusId) => Mitigation.ByStatusId.ContainsKey(statusId) || statusId == SprintHandler.SprintStatusId;
+    public static bool IsReported(ushort statusId) => Mitigation.ByStatusId.ContainsKey(statusId)
+        || Array.IndexOf(EnemyActionContext.KnockbackImmunityStatuses, statusId) >= 0
+        || statusId == JobActions.SprintStatus;
 
     public static void RoleStatus(IReadOnlyList<PartyRole> roles, ushort statusId, float duration, int stacks)
     {
@@ -112,6 +116,17 @@ internal sealed class ComboEffect(IActionEffect[] inner) : IActionEffect
     public void Apply(ActionContext ctx)
     {
         if (!ctx.CasterIsPlayer || !PlayerCombo.IsActiveContinuation(ctx.ActionId)) return;
+        foreach (var e in inner) e.Apply(ctx);
+    }
+}
+
+// Wrapper: apply the inner effects only once the player's level reaches the action they unlock. A
+// trait's Ready status granted below it would turn a button into an action the player can't use yet.
+internal sealed class UnlocksEffect(uint actionId, IActionEffect[] inner) : IActionEffect
+{
+    public void Apply(ActionContext ctx)
+    {
+        if (ctx.CasterIsPlayer && Plugin.ObjectTable.LocalPlayer?.Level < Natives.Data.Action(actionId)?.ClassJobLevel) return;
         foreach (var e in inner) e.Apply(ctx);
     }
 }
